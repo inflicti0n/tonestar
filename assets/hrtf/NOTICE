@@ -1,0 +1,17 @@
+SADIE II Database
+Copyright 2018, University of York
+Licensed under the Apache License, Version 2.0
+
+This product includes a compact extract of the SADIE II KEMAR D2
+head-related impulse response at azimuth 0°, elevation −15°,
+measured at 1.2 m (Audio Lab, University of York: Cal Armstrong,
+Lewis Thresh, Gavin Kearney).
+
+Source: https://doi.org/10.5281/zenodo.10886409
+Paper: https://doi.org/10.3390/app8112029
+License: https://www.apache.org/licenses/LICENSE-2.0
+
+The original dataset must be referenced whenever used in original
+or modified form. If used for academic work, cite DOI 10.3390/app8112029.
+
+See LICENSE.txt in this folder for the full Apache 2.0 text.

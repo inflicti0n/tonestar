@@ -1,0 +1,17 @@
+build/
+out/
+dist/
+.specstory/
+.cursor/
+.vs/
+.idea/
+CMakeUserPresets.json
+cmake-build-*/
+*.user
+*.suo
+*.sdf
+*.opensdf
+*.VC.db
+*.VC.opendb
+.DS_Store
+assets/_tmp/
