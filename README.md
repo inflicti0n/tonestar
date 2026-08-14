@@ -1,12 +1,12 @@
 # ToneStar
 
-Amp UIs copy hardware: Gain, Bass, Mid, Treble, Presence, Master. That is honest. It is the wrong first interface.
+Every amp UI looks like a faceplate. Gain, Bass, Mid, Treble, Presence, Master. Those are ingredients. When you want a heavy rhythm sound you already know the recipe: more drive, more saturation, tighter lows, less boxy low-mid, a bit of clank. Doing that on six knobs is slow, and you usually end up with a different amp than the one you started with. Big modelers keep the same strip, then add a cab locker and a Time / Rate knob on every pedal.
 
-Nobody sits down and thinks "nudge 2.5 kHz and add a clip stage." They think heavier. Tighter. Still in the mix. A heavy rhythm tone is never one knob. You raise gain, add saturation, tighten the low end, scoop the boxy low-mid, and push the clank. Six knobs later you have a different amp, not the job you asked for. Modelers make this worse. They hand you the same strip, then a cab locker, then a pedalboard with Time and Rate on every box.
+ToneStar starts from the job. The star has six pulls: Clean, Crunch, Heavy, Tight, Cut, Warm. Each one moves a bundle of internals together. Heavy is a whole land (extra stages, compression, scoop, clank). Tight is the high-pass and the faster feel. Stack them and they rewrite one amp.
 
-ToneStar is a recipe mixer. The star is six jobs: Clean, Crunch, Heavy, Tight, Cut, Warm. Pull a vertex and a bundle of internals move the way a player would. "Make it heavy" is never just more gain. Tight adds no drive. Combinations rewrite one chassis; they do not blend six amps. FX works the same way. Echo is slap to wash, not a Time knob. The cab is Size and Back, not a mic locker.
+FX and cab work the same way. Echo goes from slapback to a wash. Cab is Size and Back. In is how hard you hit the amp. Out is loudness.
 
-Center is already a playable amp. In hits it. Out is volume. It started as a Focusrite ASIO guitar monitor. It is a standalone Windows app now.
+This started as a Focusrite ASIO monitor so guitar could be heard in headphones. It is a standalone Windows app now.
 
 ## Signal path
 
@@ -14,38 +14,38 @@ Center is already a playable amp. In hits it. Out is volume. It started as a Foc
 guitar → In → processPre → star (amp) → processPost → cab / room / HRTF → Out → Tape → Looper → mute → click
 ```
 
-- **In** hits the amp. **Out** is the only volume.
-- Tape writes the finished guitar after Out. Never the click, never other tracks, never the looper.
-- The hear path mixes live guitar + unmuted tape lanes + the looper. Mute silences the room; the playhead keeps walking.
+- **In** hits the amp. **Out** is loudness.
+- Tape records the guitar after Out.
+- What you hear is live guitar, unmuted tape lanes, and the looper. Mute silences the speakers; the playhead keeps walking.
 - The metronome is mixed onto the device buffer last.
 
 ## Star
 
-Center is already a playable amp. Each vertex is 0-1 and spoke-constrained. Pulling a vertex *adds a job*, not a single parameter.
+Center is already a playable amp. Each vertex is 0-1 and stays on its spoke. Pulling one adds a job.
 
-Composition lives in ToneCompose.h. Gain is not a raw sum. Tight adds no drive. Warm owns the >6 kHz shelf.
+Composition lives in ToneCompose.h. Tight stays a feel control. Warm owns the top shelf above 6 kHz.
 
-| Pull | Job | What the recipe does |
+| Pull | Job | Recipe |
 | --- | --- | --- |
-| **Clean** | Hear the guitar | Less drive/sat, more headroom and pick |
-| **Crunch** | Edge of breakup | Mid gain, mid push, sag, not squash |
-| **Heavy** | Chug / saturate | More stages + compression, low-mid scoop, 1-2 kHz clank |
-| **Tight** | Not flubby | HPF, less bloom, faster. **No extra gain** |
-| **Cut** | Sit in the band | 0.5-3 kHz forward. Not ice-pick treble |
-| **Warm** | Stop the fizz | Darker highs, smoother clip, a bit of 250-500 Hz |
+| **Clean** | Hear the guitar | Less drive, more headroom and pick |
+| **Crunch** | Edge of breakup | Mid gain, mid push, sag |
+| **Heavy** | Chug / saturate | More stages, compression, low-mid scoop, 1-2 kHz clank |
+| **Tight** | Faster, less bloom | High-pass, less low-end hang |
+| **Cut** | Sit in the band | 0.5-3 kHz forward |
+| **Warm** | Darker, smoother | Softer clip, a bit of 250-500 Hz |
 
-Shift-drag is fine. Double-click zeros that job.
+Shift-drag for fine moves. Double-click zeros that job.
 
 ## FX ring
 
-All handles start at 0. Lands are amount, not exposed Time / Rate knobs. Pre needs a clean string. Post needs the finished amp.
+All handles start at 0. Each one is how much of that land. Pre listens to the clean string. Post sits on the finished amp.
 
 **Pre** (before the star):
 
 | Pull | Land |
 | --- | --- |
-| **Squeeze** | Comp glue → sustain → squash. Not a secret drive |
-| **Talk** | Auto-wah. Mild attack quack → full vocal sweep |
+| **Squeeze** | Comp: glue → sustain → squash |
+| **Talk** | Auto-wah: mild attack quack → full vocal sweep |
 | **Shift** | −12 → 12-string → synth stack |
 
 **Post** (after the star):
@@ -54,25 +54,25 @@ All handles start at 0. Lands are amount, not exposed Time / Rate knobs. Pre nee
 | --- | --- |
 | **Echo** | Slapback → dotted rhythm → shoegaze wash |
 | **Bloom** | Spring → plate → cloud. Right-click the label for Shimmer (octave-up tail) |
-| **Width** | Chorus. Slow thicken → deeper |
+| **Width** | Chorus: slow thicken → deeper |
 | **Sweep** | Phaser → flange |
 | **Pulse** | Trem → chop |
 
-Shimmer is not a ninth pull. Same Bloom handle, octave-up on the tail.
+Shimmer is on Bloom. Same handle, octave-up on the tail.
 
 ## Cab
 
-Always on. Not on the FX ring. Wheel or click **Size** (Combo / Twin / Stack). Right-click **Back** (Open / Closed). **Binaural** uses a SADIE II D2 pair at azimuth 0°, elevation −15° so headphones hear a cab in front. More in docs/acoustics.md.
+Always on, under the star. Wheel or click **Size** (Combo / Twin / Stack). Right-click **Back** (Open / Closed). **Binaural** uses a SADIE II D2 pair at azimuth 0°, elevation −15° so headphones hear a cab in front. More in docs/acoustics.md.
 
 ## Tape, looper, presets
 
 Gestures are in docs/controls.md.
 
-- **Tape:** eight-lane linear practice tape after Out. Not a second looper. Clips live in `Documents/ToneStar/tape`.
-- **Looper:** phrase looper after Out and Tape. Space is the pedal only while ToneStar is focused.
-- **Presets:** store the share slug only (star, FX, shimmer, binaural, cab). In / Out / mute / devices stay as they are.
+- **Tape:** eight-lane linear practice tape after Out. Clips live in `Documents/ToneStar/tape`.
+- **Looper:** phrase looper after Out and Tape. Space is the pedal while ToneStar is focused.
+- **Presets:** store the share slug (star, FX, shimmer, binaural, cab). In, Out, mute, and devices stay as they are.
 
-Settings save under `%APPDATA%\ToneStar\`. There is no migration from older Constellation folders.
+Settings save under `%APPDATA%\ToneStar\`.
 
 ## Build
 

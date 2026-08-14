@@ -1,6 +1,6 @@
 # ToneStar: what each pull does
 
-Drag a spoke. **0 is off. 1 is the full recipe.** None of these are volume. **Out** is volume.
+Drag a spoke. **0 is off. 1 is the full recipe.** Out is loudness.
 
 ```
 guitar → In → FX (clean) → STAR → FX (around the amp) → cab → Out
@@ -10,7 +10,7 @@ guitar → In → FX (clean) → STAR → FX (around the amp) → cab → Out
 
 ## Star: what amp am I standing in
 
-Center is already a playable amp. Pulling a vertex *adds a job*.
+Center is already a playable amp. Pulling a vertex adds a job.
 
 ```
               Clean
@@ -25,13 +25,13 @@ Center is already a playable amp. Pulling a vertex *adds a job*.
 | Pull | You want | What happens |
 | --- | --- | --- |
 | **Clean** | Hear the guitar | Headroom, pick, sparkle. Less dirt. |
-| **Crunch** | Edge of breakup | Classic rock grind. Mids, sag, not squash. |
+| **Crunch** | Edge of breakup | Classic rock grind. Mids, sag. |
 | **Heavy** | Chug / saturate | More stages, more compression, palm-mute clank. |
-| **Tight** | Not flubby | HPF, less bloom, faster. **Adds no gain.** |
-| **Cut** | Sit in the band | Forward mids. **Not** ice-pick treble. |
+| **Tight** | Faster, less bloom | High-pass, less low-end hang. |
+| **Cut** | Sit in the band | Forward 0.5-3 kHz. |
 | **Warm** | Stop the fizz | Darker highs, smoother clip, a bit of body. |
 
-**Pairs that work:** Heavy + Tight = modern rhythm. Clean + Warm = jazz/bedroom. Crunch + Cut = it cuts a mix. Heavy + Warm = thick, not harsh.
+**Pairs that work:** Heavy + Tight = modern rhythm. Clean + Warm = jazz/bedroom. Crunch + Cut = it cuts a mix. Heavy + Warm = thick.
 
 ---
 
@@ -43,7 +43,7 @@ All start at 0. Three listen to the *clean* string. Five sit *after* the amp.
 
 | Pull | You want | Low → high |
 | --- | --- | --- |
-| **Squeeze** | Even / sticky | Glue → sustain → squash. Not a secret drive. |
+| **Squeeze** | Even / sticky | Glue → sustain → squash. |
 | **Talk** | Wah / quack | Mild attack quack → full vocal sweep. |
 | **Shift** | Bigger / organ | Fat low octave → 12-string → synth stack. |
 
@@ -57,13 +57,13 @@ All start at 0. Three listen to the *clean* string. Five sit *after* the amp.
 | **Sweep** | Swirl / jet | Phaser → flange. |
 | **Pulse** | Chop / surf | Soft throb → hard trem chop. |
 
-> **Shimmer** is not a ninth pull. Right-click the **Bloom** label. Same handle, octave-up on the tail.
+> Right-click the **Bloom** label for **Shimmer**. Same handle, octave-up on the tail.
 
 ---
 
 ## Cab: what speaker is it in
 
-Always on. Not on the FX ring. Not a second Bloom. Poke the box.
+Always on, under the star. Poke the box.
 
 | Gesture | You want | Lands |
 | --- | --- | --- |
@@ -80,8 +80,8 @@ Void page, solid fills, no outlines. Space Grotesk on the title, Gaegu on the ch
 
 | Control | Does |
 | --- | --- |
-| **In** | How hard you hit the amp. Not tone. |
-| **Out** | How loud the room is. The only volume knob. |
+| **In** | How hard you hit the amp. |
+| **Out** | How loud the room is. |
 | **Mute** | Circle. Lights flare when silent. Title on hover. |
 | **Binaural** | Circle. Lights nova when the cab is in front. Title on hover. |
 | **Debug** | Circle. Lights starlight while the peak log runs. Title on hover. |
@@ -91,7 +91,7 @@ Void page, solid fills, no outlines. Space Grotesk on the title, Gaegu on the ch
 
 ## Tape (Advanced)
 
-Grows left, three times the old strip. This is a **linear practice tape**, not a second looper. Record the finished guitar (after Out). Play the other lanes. The click never goes on a track. The looper is never baked into a track. Mute silences the room, not the tape.
+Grows left. Linear practice tape. Record the finished guitar after Out. Play the other lanes. Mute silences the speakers; tape keeps writing.
 
 Clips live in `Documents/ToneStar/tape` as `track0.wav` … `track7.wav`. The WAV stays whole. Dragging either edge only changes a virtual in or out point.
 
@@ -99,18 +99,18 @@ Clips live in `Documents/ToneStar/tape` as `track0.wav` … `track7.wav`. The WA
 | --- | --- |
 | **Play / Pause** | One button. Play when stopped or paused, pause while it is running |
 | **Stop** | Returns the playhead to zero |
-| **Record** | Writes the armed empty lane. Stop freezes the playhead. Will not replace a clip. Delete first |
+| **Record** | Writes the armed empty lane. Stop freezes the playhead. Delete a clip before recording that lane again |
 | **Q** | Grid. Rec waits for the next beat and closes on a beat. Move and trim snap to beats |
 | **Loop** | Lights a range on the ruler. Play wraps at the right edge. Drag either border to resize, drag the bar to move |
 | **Folder** | Open the tape directory |
 | **Export** | Bounce unmuted lanes into one 24-bit stereo WAV. Same mix as playback. Pick a start time and length in seconds |
 | **Click lane** | Arm that lane. The whole row lights |
 | **Click clip** | Select it (starlight border). X or Delete / Backspace removes it |
-| **Mute** | Skip that lane in the mix. Does not change the file |
+| **Mute** | Skip that lane in the mix |
 | **Level** | Vertical fader next to the name. How loud that lane is in playback and export |
 | **Right-click name** | Rename. Click elsewhere to finish |
-| **Drag clip** | Move it on the timeline. Does not zoom or rescale the grid |
-| **Drag left / right edge** | Virtual crop. Right edge stays put when you crop the left. Never writes a new WAV |
+| **Drag clip** | Move it on the timeline |
+| **Drag left / right edge** | Virtual crop. Right edge stays put when you crop the left. The WAV stays whole |
 | **Wheel on ruler or wave** | Zoom around the pointer. Shift+wheel pans |
 | **Drag ruler** | Pan the view. Click the ruler to jump the playhead |
 | **Playhead triangle** | Downward starlight handle on the ruler. Drag it to seek |
@@ -120,7 +120,7 @@ Clips live in `Documents/ToneStar/tape` as `track0.wav` … `track7.wav`. The WA
 
 ## Looper
 
-Grows down. The phrase sits **after Out and Tape**. Live guitar always passes through. The click never enters a phrase. Mute silences the room; the playhead keeps walking. Tape writes guitar only, never the loop.
+Grows down. The phrase sits after Out and Tape. Live guitar always passes through. Mute silences the speakers; the playhead keeps walking.
 
 Default is **Simple**: one phrase, Ditto / RC-1.
 
@@ -130,7 +130,7 @@ Default is **Simple**: one phrase, Ditto / RC-1.
 | **Double-tap** | Stop (keep the phrase). During first record or while armed, discard |
 | **Hold ~1.5 s** | Playing / overdub → undo or redo the last layer. Stopped / armed → clear |
 | **Q** | Quantize. Off = free length. On = wait for the next beat to start, close on a later beat |
-| **Level** | How loud the phrase is next to you. Not Out |
+| **Level** | How loud the phrase is next to you |
 
 Right-click the **Looper** title for **Advanced** (Bloom → Shimmer). Two phrases, like an RC-500. Each has rec/play, stop, and level. The first closed phrase is master; the second locks to its length. Restart waits for the master’s downbeat.
 
