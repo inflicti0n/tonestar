@@ -76,22 +76,28 @@ Settings save under `%APPDATA%\ToneStar\`.
 
 ## Build
 
-Windows 10/11, Visual Studio 2022 with the CMake workload. The CMake target is still `GuitarMonitor`; the product name is ToneStar.
+Windows 10/11, Visual Studio 2022 with the CMake workload. The CMake target is `ToneStar`.
+
+```bat
+build.bat
+```
+
+That configures and builds Release to `build/ToneStar_artefacts/Release/ToneStar.exe`. Close the app first (the exe locks).
 
 ```bat
 package.bat
 ```
 
-That configures, builds Release, and writes `dist/ToneStar.zip` with `ToneStar.exe`. No install. Close the app before rebuilding (the exe locks).
+Same build, then writes `dist/ToneStar.zip`. No install.
 
 ASIO duplex: pick the same interface as input and output. Turn Direct Monitor **off** or you will hear double.
 
 ```
 cmake -S . -B build
-cmake --build build --config Release --target GuitarMonitor
+cmake --build build --config Release --target ToneStar
 ```
 
-The exe lands at `build/GuitarMonitor_artefacts/Release/ToneStar.exe`. JUCE 8.0.15 is fetched at configure time.
+The exe lands at `build/ToneStar_artefacts/Release/ToneStar.exe`. JUCE 8.0.15 is fetched at configure time.
 
 ## Licence
 

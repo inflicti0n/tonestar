@@ -39,6 +39,7 @@ public:
     void setArmedLane(int lane);
     void setMute(int lane, bool shouldMute);
     void setLevel(int lane, float level);
+    void setPan(int lane, float pan);
     void setName(int lane, const juce::String& name);
     void setStart(int lane, int startSample);
     void setEnd(int lane, int endSample);
@@ -71,6 +72,7 @@ public:
     juce::String getName(int lane) const;
     bool isMuted(int lane) const;
     float getLevel(int lane) const;
+    float getPan(int lane) const;
     bool hasClip(int lane) const;
 
     struct LaneView
@@ -110,6 +112,7 @@ private:
         std::atomic<int> hasClip { 0 };
         std::atomic<int> mute { 0 };
         std::atomic<float> level { 1.0f };
+        std::atomic<float> pan { 0.0f };
         std::atomic<int> hopCount { 0 };
         float hops[maxHops] {};
         juce::String name;

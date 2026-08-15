@@ -120,10 +120,14 @@ private:
         juce::Rectangle<float> nameBounds() const;
         juce::Rectangle<float> levelBounds() const;
         juce::Rectangle<float> levelThumb() const;
+        juce::Rectangle<float> panBounds() const;
+        juce::Rectangle<float> panThumb() const;
         juce::Rectangle<float> clipBounds() const;
         juce::Rectangle<float> deleteBoundsFor(juce::Rectangle<float> clip) const;
         bool inLevel(juce::Point<float> p) const;
+        bool inPan(juce::Point<float> p) const;
         void setLevelFromY(float y);
+        void setPanFromX(float x);
         void startNameEdit();
         void drawWave(juce::Graphics& g, juce::Rectangle<float> clip, const TapeEngine::LaneView& view,
                       int recFrames) const;
@@ -137,6 +141,7 @@ private:
         bool selected = false;
         bool deleteHot = false;
         bool draggingLevel = false;
+        bool draggingPan = false;
         Drag drag = Drag::None;
         int dragStartValue = 0;
         int dragStartX = 0;

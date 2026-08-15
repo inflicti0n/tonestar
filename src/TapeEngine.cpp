@@ -126,6 +126,14 @@ void TapeEngine::setLevel(int lane, float level)
     metaDirty.store(true, std::memory_order_relaxed);
 }
 
+void TapeEngine::setPan(int lane, float pan)
+{
+    if (! valid(lane))
+        return;
+    lanes[lane].pan.store(juce::jlimit(-1.0f, 1.0f, pan), std::memory_order_relaxed);
+    metaDirty.store(true, std::memory_order_relaxed);
+}
+
 void TapeEngine::setName(int lane, const juce::String& name)
 {
     if (! valid(lane) || name.trim().isEmpty())
@@ -325,6 +333,13 @@ float TapeEngine::getLevel(int lane) const
     return lanes[lane].level.load(std::memory_order_relaxed);
 }
 
+float TapeEngine::getPan(int lane) const
+{
+    if (! valid(lane))
+        return 0.0f;
+    return lanes[lane].pan.load(std::memory_order_relaxed);
+}
+
 bool TapeEngine::hasClip(int lane) const
 {
     return valid(lane) && lanes[lane].hasClip.load(std::memory_order_relaxed) != 0;
@@ -496,8 +511,12 @@ void TapeEngine::mixLane(const Lane& lane, int head, float& outL, float& outR) c
         return;
 
     const float gain = lane.level.load(std::memory_order_relaxed);
-    outL += lane.audio.getSample(0, fileIdx) * gain;
-    outR += lane.audio.getSample(1, fileIdx) * gain;
+    const float angle = (lane.pan.load(std::memory_order_relaxed) + 1.0f)
+                        * (juce::MathConstants<float>::halfPi * 0.5f);
+    const float gL = gain * std::cos(angle);
+    const float gR = gain * std::sin(angle);
+    outL += lane.audio.getSample(0, fileIdx) * gL;
+    outR += lane.audio.getSample(1, fileIdx) * gR;
 }
 
 void TapeEngine::noteHop(Lane& lane, int pos, float peak)
@@ -689,6 +708,7 @@ void TapeEngine::loadSession()
         lane.end.store(0, std::memory_order_relaxed);
         lane.mute.store(0, std::memory_order_relaxed);
         lane.level.store(1.0f, std::memory_order_relaxed);
+        lane.pan.store(0.0f, std::memory_order_relaxed);
         lane.hopCount.store(0, std::memory_order_relaxed);
         std::fill(std::begin(lane.hops), std::end(lane.hops), 0.0f);
 
@@ -707,6 +727,8 @@ void TapeEngine::loadSession()
                 lane.mute.store(node->getBoolAttribute("mute") ? 1 : 0, std::memory_order_relaxed);
                 lane.level.store(juce::jlimit(0.0f, 1.0f, (float) node->getDoubleAttribute("level", 1.0)),
                                  std::memory_order_relaxed);
+                lane.pan.store(juce::jlimit(-1.0f, 1.0f, (float) node->getDoubleAttribute("pan", 0.0)),
+                               std::memory_order_relaxed);
             }
         }
 
@@ -781,6 +803,7 @@ void TapeEngine::saveSession()
         node->setAttribute("end", lane.end.load(std::memory_order_relaxed));
         node->setAttribute("mute", lane.mute.load(std::memory_order_relaxed) != 0 ? 1 : 0);
         node->setAttribute("level", (double) lane.level.load(std::memory_order_relaxed));
+        node->setAttribute("pan", (double) lane.pan.load(std::memory_order_relaxed));
 
         if (! writeAudio)
             continue;

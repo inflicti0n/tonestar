@@ -1,9 +1,11 @@
 #include "MainComponent.h"
+#include "AppLog.h"
+#include <juce_gui_basics/juce_gui_basics.h>
 
 MainComponent::MainComponent()
 {
+    AppLog::note("MainComponent ctor");
     setLookAndFeel(&lookAndFeel);
-    setSize(520, 920);
     setOpaque(true);
     setWantsKeyboardFocus(true);
 
@@ -164,6 +166,14 @@ MainComponent::MainComponent()
     };
     addAndMakeVisible(field);
 
+    plasmaTune.onChange = [this] (const PlasmaLook& look)
+    {
+        field.setPlasmaLook(look);
+    };
+    field.setPlasmaLook(plasmaTune.getLook());
+    plasmaTune.setLookAndFeel(&lookAndFeel);
+    addChildComponent(plasmaTune);
+
     copyButton.onClick = [this] { copySlug(); };
     copyButton.setWantsKeyboardFocus(false);
     addAndMakeVisible(copyButton);
@@ -191,31 +201,82 @@ MainComponent::MainComponent()
     addAndMakeVisible(slugField);
 
     loadSettings();
+    AppLog::note("settings loaded");
+    setSize(520, 920);
+    applyWindowSize();
+    chrome.toFront(false);
+    startTimerHz(30);
+    AppLog::note("MainComponent ready");
+}
 
-    std::unique_ptr<juce::XmlElement> audioXml(appSettings().getXmlValue("audio"));
-    juce::String error = deviceManager.initialise(2, 2, audioXml.get(), true);
-    if (error.isNotEmpty())
+void MainComponent::startAudio()
+{
+    AppLog::note("audio begin");
+
+    std::unique_ptr<juce::XmlElement> audioXml;
+    const bool useSaved = AppLog::previousRunFinished();
+    if (useSaved)
+        audioXml = appSettings().getXmlValue("audio");
+    else
+        AppLog::note("previous run did not finish, skipping saved audio device");
+
+    struct Ctx
+    {
+        juce::AudioDeviceManager* manager = nullptr;
+        juce::XmlElement* xml = nullptr;
+        juce::String error;
+    };
+
+    auto initFn = [] (void* p)
+    {
+        auto* ctx = static_cast<Ctx*>(p);
+        ctx->error = ctx->manager->initialise(2, 2, ctx->xml, true);
+    };
+
+    Ctx ctx { &deviceManager, audioXml.get(), {} };
+    unsigned int code = 0;
+    AppLog::note(ctx.xml != nullptr ? "audio init saved device" : "audio init default device");
+    bool ok = AppLog::runSeh(initFn, &ctx, &code) && ctx.error.isEmpty();
+    if (! ok)
+    {
+        AppLog::note("audio init failed code=" + juce::String::toHexString((int) code)
+                     + " err=" + ctx.error);
+        if (useSaved)
+            appSettings().removeValue("audio");
+        ctx.xml = nullptr;
+        ctx.error.clear();
+        code = 0;
+        AppLog::note("audio init fallback");
+        ok = AppLog::runSeh(initFn, &ctx, &code) && ctx.error.isEmpty();
+        if (! ok)
+            AppLog::note("audio fallback failed code=" + juce::String::toHexString((int) code)
+                         + " err=" + ctx.error);
+    }
+
+    if (! ok && ! selfTesting)
+    {
         juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
                                                "Audio",
-                                               "Could not start audio: " + error);
+                                               "Could not start audio: " + ctx.error);
+    }
 
     player.setProcessor(&processor);
     deviceManager.addAudioCallback(&player);
     deviceManager.addChangeListener(this);
-
     refreshInputChannels();
     updateLatencyLabel();
-    applyWindowSize();
-    chrome.toFront(false);
-    startTimerHz(30);
+    audioStartedOk = ok && deviceManager.getCurrentAudioDevice() != nullptr;
+    AppLog::note(audioStartedOk ? "audio ready" : "audio ready without device");
 }
 
 MainComponent::~MainComponent()
 {
     stopTimer();
     stopDebugLog();
+    plasmaTune.setLookAndFeel(nullptr);
     processor.stopRecording();
-    saveSettings();
+    if (! selfTesting)
+        saveSettings();
     deviceManager.removeChangeListener(this);
     deviceManager.removeAudioCallback(&player);
     player.setProcessor(nullptr);
@@ -364,7 +425,7 @@ void MainComponent::saveSettings()
 
 void MainComponent::markDirty()
 {
-    if (restoring)
+    if (restoring || selfTesting)
         return;
 
     settingsDirty = true;
@@ -421,19 +482,153 @@ void MainComponent::showCurrentSlug()
     slugField.setText(currentSlug(), juce::dontSendNotification);
 }
 
+void MainComponent::togglePlasmaTune()
+{
+    const bool show = ! plasmaTune.isVisible();
+    AppLog::note(show ? "show plasma tune" : "hide plasma tune");
+    plasmaTune.setVisible(show);
+    applyWindowSize();
+}
+
+void MainComponent::enableSelfTest()
+{
+    selfTesting = true;
+    AppLog::note("self-test enabled");
+}
+
+void MainComponent::scheduleSelfTest()
+{
+    juce::Component::SafePointer<MainComponent> safe(this);
+    juce::Timer::callAfterDelay(500, [safe]
+    {
+        if (safe != nullptr)
+            safe->runSelfTest();
+    });
+}
+
+int MainComponent::windowWidth() const
+{
+    return getWidth();
+}
+
+int MainComponent::windowHeight() const
+{
+    return getHeight();
+}
+
+void MainComponent::runSelfTest()
+{
+    AppLog::note("self-test begin");
+    juce::StringArray lines;
+    bool failed = false;
+
+    auto check = [&] (const juce::String& name, bool ok, const juce::String& detail)
+    {
+        const auto line = (ok ? "PASS " : "FAIL ") + name + " " + detail;
+        lines.add(line);
+        AppLog::note("self-test " + line);
+        if (! ok)
+            failed = true;
+    };
+
+    chrome.advancedButton.setToggleState(false, juce::sendNotification);
+    chrome.presetsButton.setToggleState(false, juce::sendNotification);
+    chrome.looperButton.setToggleState(false, juce::sendNotification);
+    if (plasmaTune.isVisible())
+        togglePlasmaTune();
+
+    const int baseW = windowWidth();
+    const int baseH = windowHeight();
+    check("baseline", baseW == 520 && baseH == 920,
+          juce::String(baseW) + "x" + juce::String(baseH));
+
+    chrome.advancedButton.setToggleState(true, juce::sendNotification);
+    check("advanced-open", advanced.isVisible() && windowWidth() == 520 + AdvancedDrawer::width,
+          juce::String(windowWidth()) + "x" + juce::String(windowHeight()));
+    chrome.advancedButton.setToggleState(false, juce::sendNotification);
+    check("advanced-close", ! advanced.isVisible() && windowWidth() == 520,
+          juce::String(windowWidth()));
+
+    chrome.presetsButton.setToggleState(true, juce::sendNotification);
+    check("presets-open", drawer.isVisible() && windowWidth() == 520 + PresetDrawer::width,
+          juce::String(windowWidth()));
+    chrome.presetsButton.setToggleState(false, juce::sendNotification);
+    check("presets-close", ! drawer.isVisible() && windowWidth() == 520,
+          juce::String(windowWidth()));
+
+    chrome.looperButton.setToggleState(true, juce::sendNotification);
+    check("looper-open", looperDrawer.isVisible() && windowHeight() == 920 + looperDrawer.height(),
+          juce::String(windowWidth()) + "x" + juce::String(windowHeight()));
+    chrome.looperButton.setToggleState(false, juce::sendNotification);
+    check("looper-close", ! looperDrawer.isVisible() && windowHeight() == 920,
+          juce::String(windowHeight()));
+
+    const int beforePlasma = windowWidth();
+    togglePlasmaTune();
+    check("plasma-open", plasmaTune.isVisible() && plasmaTune.getWidth() >= 40
+          && windowWidth() == beforePlasma + PlasmaTune::width,
+          "vis=" + juce::String((int) plasmaTune.isVisible())
+          + " panelW=" + juce::String(plasmaTune.getWidth())
+          + " winW=" + juce::String(windowWidth()));
+
+    const auto shortcut = juce::KeyPress('p',
+        juce::ModifierKeys::ctrlModifier | juce::ModifierKeys::shiftModifier, 0);
+    keyPressed(shortcut);
+    check("shortcut-close", ! plasmaTune.isVisible() && windowWidth() == beforePlasma,
+          juce::String(windowWidth()));
+    keyPressed(shortcut);
+    check("shortcut-open", plasmaTune.isVisible() && plasmaTune.getWidth() >= 40
+          && windowWidth() == beforePlasma + PlasmaTune::width,
+          juce::String(windowWidth()));
+
+    if (! audioStartedOk)
+        lines.add("WARN audio not started");
+
+    AppLog::note("self-test wait for fft");
+    juce::Component::SafePointer<MainComponent> safe(this);
+    juce::Timer::callAfterDelay(1500, [safe, lines, failed]
+    {
+        if (safe == nullptr)
+            return;
+
+        auto report = lines;
+        report.add(failed ? "FAIL" : "PASS");
+        AppLog::directory().createDirectory();
+        AppLog::selfTestFile().replaceWithText(report.joinIntoString("\n") + "\n");
+        AppLog::note(failed ? "self-test failed" : "self-test passed");
+
+        if (auto* app = juce::JUCEApplication::getInstance())
+        {
+            app->setApplicationReturnValue(failed ? 1 : 0);
+            app->systemRequestedQuit();
+        }
+    });
+}
+
 void MainComponent::applyWindowSize()
 {
+    if (applyingWindowSize)
+        return;
+    applyingWindowSize = true;
+    const struct Reset
+    {
+        bool& flag;
+        ~Reset() { flag = false; }
+    } reset { applyingWindowSize };
+
     const bool adv = chrome.advancedButton.getToggleState();
     const bool pre = chrome.presetsButton.getToggleState();
     const bool loop = chrome.looperButton.getToggleState();
+    const bool tune = plasmaTune.isVisible();
     advanced.setVisible(adv);
     drawer.setVisible(pre);
     looperDrawer.setVisible(loop);
 
     const int leftW = adv ? AdvancedDrawer::width : 0;
     const int rightW = pre ? PresetDrawer::width : 0;
+    const int tuneW = tune ? PlasmaTune::width : 0;
     const int loopH = loop ? looperDrawer.height() : 0;
-    const int w = 520 + leftW + rightW;
+    const int w = 520 + leftW + rightW + tuneW;
     const int h = 920 + loopH;
 
     if (auto* top = getTopLevelComponent())
@@ -567,6 +762,12 @@ bool MainComponent::looperPedalArmed() const
 
 bool MainComponent::keyPressed(const juce::KeyPress& key)
 {
+    if (key == juce::KeyPress('p', juce::ModifierKeys::ctrlModifier | juce::ModifierKeys::shiftModifier, 0))
+    {
+        togglePlasmaTune();
+        return true;
+    }
+
     if (looperPedalArmed() && key == juce::KeyPress::spaceKey)
         return true;
 
@@ -648,11 +849,14 @@ void MainComponent::resized()
     constexpr int mainW = 520;
     constexpr int mainH = 920;
     const int leftW = advanced.isVisible() ? AdvancedDrawer::width : 0;
+    const int tuneW = plasmaTune.isVisible() ? PlasmaTune::width : 0;
     const int loopH = looperDrawer.isVisible() ? looperDrawer.height() : 0;
     chrome.setBounds(0, 0, getWidth(), WindowChrome::barHeight);
     advanced.setBounds(0, WindowChrome::barHeight, leftW,
                        mainH - WindowChrome::barHeight);
-    drawer.setBounds(leftW + mainW, WindowChrome::barHeight, PresetDrawer::width,
+    plasmaTune.setBounds(leftW + mainW, WindowChrome::barHeight, PlasmaTune::width,
+                         mainH - WindowChrome::barHeight);
+    drawer.setBounds(leftW + mainW + tuneW, WindowChrome::barHeight, PresetDrawer::width,
                      mainH - WindowChrome::barHeight);
     looperDrawer.setBounds(0, mainH, getWidth(), loopH);
 
@@ -705,6 +909,8 @@ void MainComponent::timerCallback()
 {
     const float peak = processor.getPeak();
     meterLevel = juce::jmax(peak, meterLevel * 0.82f);
+    field.setFieldEnergy(processor.getFieldEnergy());
+    field.setFieldSpectrum(processor.getFieldSpectrum());
     if (processor.takeClip())
         clipHoldTicks = 30;
     else if (clipHoldTicks > 0)
@@ -723,7 +929,7 @@ void MainComponent::timerCallback()
         slugField.repaint();
     }
 
-    if (settingsDirty && juce::Time::currentTimeMillis() - dirtyAt > 400)
+    if (! selfTesting && settingsDirty && juce::Time::currentTimeMillis() - dirtyAt > 400)
         saveSettings();
 
     advanced.consumePulse(processor.takeMetroPulse());

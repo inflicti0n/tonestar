@@ -1,4 +1,5 @@
 #include "GuitarProcessor.h"
+#include "AppLog.h"
 #include <cmath>
 
 GuitarProcessor::GuitarProcessor()
@@ -84,6 +85,20 @@ bool GuitarProcessor::getBloomShimmer() const
     return fx.getBloomShimmer();
 }
 
+FieldEnergy GuitarProcessor::getFieldEnergy() const
+{
+    return {
+        fieldEnergyOut.load(std::memory_order_relaxed),
+        fieldPunchOut.load(std::memory_order_relaxed),
+        fieldBreathOut.load(std::memory_order_relaxed)
+    };
+}
+
+FieldSpectrum GuitarProcessor::getFieldSpectrum() const
+{
+    return spectrum.snapshot();
+}
+
 void GuitarProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     monoBuffer.setSize(1, samplesPerBlock);
@@ -101,6 +116,13 @@ void GuitarProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     acoustics.prepare(spec);
     tape.prepare(sampleRate, samplesPerBlock);
     looper.prepare(sampleRate, samplesPerBlock);
+    AppLog::note("processor prepare " + juce::String(sampleRate, 0)
+                 + " / " + juce::String(samplesPerBlock));
+    spectrum.prepare(sampleRate);
+
+    fieldEnergyEnv = 0.0f;
+    fieldPunchEnv = 0.0f;
+    fieldBreathEnv = 0.08f;
 }
 
 void GuitarProcessor::releaseResources()
@@ -112,6 +134,7 @@ void GuitarProcessor::releaseResources()
     fx.reset();
     acoustics.reset();
     looper.reset();
+    spectrum.reset();
 }
 
 bool GuitarProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
@@ -222,6 +245,37 @@ void GuitarProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     looper.setBpm((float) bpm);
     tape.process(stereoBuffer, numSamples, metroSample, samplesPerBeat);
     looper.process(stereoBuffer, numSamples, metroSample, samplesPerBeat);
+
+    {
+        const float mixPeak = juce::jmax(stereoBuffer.getMagnitude(0, 0, numSamples),
+                                         stereoBuffer.getMagnitude(1, 0, numSamples));
+        const float mixRms = 0.5f * (stereoBuffer.getRMSLevel(0, 0, numSamples)
+                                     + stereoBuffer.getRMSLevel(1, 0, numSamples));
+        const float dt = currentSampleRate > 0.0
+                             ? (float) numSamples / (float) currentSampleRate
+                             : 0.005f;
+        const float energyCoeff = 1.0f - std::exp(-dt / 0.080f);
+        const float breathCoeff = 1.0f - std::exp(-dt / 1.40f);
+        const float punchFall = 1.0f - std::exp(-dt / 0.165f);
+
+        fieldEnergyEnv += (mixRms - fieldEnergyEnv) * energyCoeff;
+        fieldBreathEnv += (mixRms - fieldBreathEnv) * breathCoeff;
+        const float onset = juce::jmax(0.0f, mixPeak - fieldEnergyEnv * 2.2f);
+        fieldPunchEnv = juce::jmax(onset, fieldPunchEnv * (1.0f - punchFall));
+
+        const float energyNorm = juce::jlimit(0.0f, 1.0f, fieldEnergyEnv * 8.0f);
+        const float breathNorm = juce::jlimit(0.0f, 1.0f, fieldBreathEnv * 8.0f);
+        fieldEnergyOut.store(juce::jlimit(0.0f, 1.0f, std::pow(energyNorm, 0.55f)),
+                             std::memory_order_relaxed);
+        fieldPunchOut.store(juce::jlimit(0.0f, 1.0f, fieldPunchEnv * 2.4f),
+                            std::memory_order_relaxed);
+        fieldBreathOut.store(juce::jlimit(0.0f, 1.0f, std::pow(breathNorm, 0.65f)),
+                             std::memory_order_relaxed);
+
+        spectrum.pushStereo(stereoBuffer.getReadPointer(0),
+                            stereoBuffer.getNumChannels() > 1 ? stereoBuffer.getReadPointer(1) : nullptr,
+                            numSamples);
+    }
 
     if (numOuts == 1)
     {

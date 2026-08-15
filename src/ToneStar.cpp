@@ -17,6 +17,25 @@ void ToneStar::resized()
     const auto bounds = getLocalBounds().toFloat().reduced(22.0f, 24.0f);
     centre = bounds.getCentre();
     radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.40f;
+    syncPlasma();
+}
+
+void ToneStar::setFieldEnergy(FieldEnergy next)
+{
+    plasma.setFieldEnergy(next);
+}
+
+void ToneStar::setPlasmaLook(const PlasmaLook& next)
+{
+    plasma.setLook(next);
+}
+
+void ToneStar::syncPlasma()
+{
+    std::array<juce::Point<float>, 6> values;
+    for (int i = 0; i < numAxes; ++i)
+        values[(size_t) i] = spokePoint(i, display[(size_t) i]);
+    plasma.setShape(centre, radius, values, getWidth(), getHeight());
 }
 
 float ToneStar::visualRadius(float value) const
@@ -146,8 +165,14 @@ void ToneStar::tick()
         }
     }
 
-    if (dirty)
+    syncPlasma();
+    plasma.requestFrame();
+    const auto plasmaSerial = plasma.frameSerial();
+    if (dirty || plasmaSerial != lastPlasmaSerial)
+    {
+        lastPlasmaSerial = plasmaSerial;
         repaint();
+    }
 }
 
 void ToneStar::setAxisFromEvent(const juce::MouseEvent& e)
@@ -234,11 +259,25 @@ void ToneStar::paint(juce::Graphics& g)
     for (int i = 0; i < numAxes; ++i)
         g.drawLine({ spokePoint(i, 0.0f), outer[(size_t) i] }, 1.0f);
 
+    const auto starPath = axisPath(values, 7.0f);
     g.setColour(CuteLookAndFeel::peach().withAlpha(0.35f));
-    g.fillPath(axisPath(values, 7.0f));
+    g.fillPath(starPath);
+
+    const auto plasmaFrame = plasma.copyFrame();
+    if (plasmaFrame.isValid())
+    {
+        const auto dest = getLocalBounds().toFloat();
+        g.saveState();
+        g.reduceClipRegion(starPath);
+        g.drawImage(plasmaFrame, dest);
+        g.setOpacity(0.55f);
+        g.drawImage(plasmaFrame, dest);
+        g.restoreState();
+    }
+
     g.setColour(CuteLookAndFeel::rose());
-    g.strokePath(axisPath(values, 7.0f), juce::PathStrokeType(2.0f, juce::PathStrokeType::mitered,
-                                                              juce::PathStrokeType::butt));
+    g.strokePath(starPath, juce::PathStrokeType(2.0f, juce::PathStrokeType::mitered,
+                                                juce::PathStrokeType::butt));
 
     g.setColour(CuteLookAndFeel::card());
     g.fillEllipse(centre.x - 5.0f, centre.y - 5.0f, 10.0f, 10.0f);

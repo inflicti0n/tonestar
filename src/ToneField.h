@@ -1,7 +1,10 @@
 #pragma once
 
 #include "CuteLookAndFeel.h"
+#include "FieldEnergy.h"
+#include "FieldSpectrum.h"
 #include "FxRack.h"
+#include "PlasmaLook.h"
 #include "ToneStar.h"
 
 #include <array>
@@ -28,6 +31,9 @@ public:
     void setFxValues(const std::array<float, 8>& values, bool notify);
     std::array<float, 8> getFxValues() const;
     void setBloomShimmer(bool shouldShimmer, bool notify);
+    void setFieldEnergy(FieldEnergy next);
+    void setFieldSpectrum(const FieldSpectrum& next);
+    void setPlasmaLook(const PlasmaLook& next);
     bool getBloomShimmer() const { return bloomShimmer; }
 
     juce::String getActiveName() const;
@@ -48,7 +54,10 @@ private:
     juce::Point<float> fxSpoke(int index, float amount) const;
     juce::Point<float> fxLabelPoint(int index) const;
     juce::Rectangle<float> fxLabelBounds(int index) const;
-    juce::Path fxValuePath() const;
+    float fxRadiusAtUnit(float t) const;
+    float fxAngleAtUnit(float t) const;
+    float spectrumAt(float t) const;
+    void paintFxSpectrum(juce::Graphics& g);
     float projectToFx(juce::Point<float> p, int index) const;
     int hitFxHandle(juce::Point<float> p) const;
     bool hitBloomLabel(juce::Point<float> p) const;
@@ -57,6 +66,10 @@ private:
     const char* bloomLabel() const;
 
     ToneStar star;
+    PlasmaLook look;
+    FieldSpectrum spectrum {};
+    FieldSpectrum spectrumShown {};
+    float ringTime = 0.0f;
     std::array<float, 8> fxTarget {};
     std::array<float, 8> fxDisplay {};
     bool bloomShimmer = false;

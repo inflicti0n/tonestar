@@ -213,7 +213,7 @@ AdvancedDrawer::LaneRow::LaneRow(int indexToUse)
     addAndMakeVisible(muteButton);
 
     editor.setVisible(false);
-    editor.setJustification(juce::Justification::centredLeft);
+    editor.setJustification(juce::Justification::topLeft);
     editor.onReturnKey = [this] { finishNameEdit(); };
     editor.onFocusLost = [this] { finishNameEdit(); };
     editor.setColour(juce::TextEditor::backgroundColourId, CuteLookAndFeel::voidFill());
@@ -238,12 +238,25 @@ juce::Rectangle<float> AdvancedDrawer::LaneRow::waveBounds() const
 
 juce::Rectangle<float> AdvancedDrawer::LaneRow::nameBounds() const
 {
-    return juce::Rectangle<float>(36.0f, 22.0f, 50.0f, 28.0f);
+    return { 8.0f, 4.0f, 86.0f, 20.0f };
 }
 
 juce::Rectangle<float> AdvancedDrawer::LaneRow::levelBounds() const
 {
-    return { 90.0f, 14.0f, 8.0f, 44.0f };
+    return { 100.0f, 16.0f, 8.0f, 42.0f };
+}
+
+juce::Rectangle<float> AdvancedDrawer::LaneRow::panBounds() const
+{
+    return { 34.0f, 46.0f, 58.0f, 8.0f };
+}
+
+juce::Rectangle<float> AdvancedDrawer::LaneRow::panThumb() const
+{
+    const float t = tape != nullptr ? juce::jlimit(-1.0f, 1.0f, tape->getPan(index)) : 0.0f;
+    const auto bar = panBounds();
+    const float x = bar.getX() + (t + 1.0f) * 0.5f * bar.getWidth();
+    return juce::Rectangle<float>(14.0f, 14.0f).withCentre({ x, bar.getCentreY() });
 }
 
 juce::Rectangle<float> AdvancedDrawer::LaneRow::levelThumb() const
@@ -259,6 +272,11 @@ bool AdvancedDrawer::LaneRow::inLevel(juce::Point<float> p) const
     return levelBounds().expanded(10.0f, 8.0f).contains(p) || levelThumb().expanded(4.0f).contains(p);
 }
 
+bool AdvancedDrawer::LaneRow::inPan(juce::Point<float> p) const
+{
+    return panBounds().expanded(8.0f, 10.0f).contains(p) || panThumb().expanded(4.0f).contains(p);
+}
+
 void AdvancedDrawer::LaneRow::setLevelFromY(float y)
 {
     if (tape == nullptr)
@@ -267,6 +285,17 @@ void AdvancedDrawer::LaneRow::setLevelFromY(float y)
     if (bar.getHeight() <= 0.0f)
         return;
     tape->setLevel(index, (bar.getBottom() - y) / bar.getHeight());
+    repaint();
+}
+
+void AdvancedDrawer::LaneRow::setPanFromX(float x)
+{
+    if (tape == nullptr)
+        return;
+    const auto bar = panBounds();
+    if (bar.getWidth() <= 0.0f)
+        return;
+    tape->setPan(index, (x - bar.getX()) / bar.getWidth() * 2.0f - 1.0f);
     repaint();
 }
 
@@ -341,9 +370,9 @@ void AdvancedDrawer::LaneRow::paint(juce::Graphics& g)
     if (! editing && tape != nullptr)
     {
         if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
-            g.setFont(laf->font(14.0f, true));
+            g.setFont(laf->font(16.0f, true));
         g.setColour(CuteLookAndFeel::mist());
-        g.drawText(tape->getName(index), nameBounds(), juce::Justification::centredLeft, true);
+        g.drawText(tape->getName(index), nameBounds(), juce::Justification::topLeft, true);
     }
 
     const auto bar = levelBounds();
@@ -353,6 +382,17 @@ void AdvancedDrawer::LaneRow::paint(juce::Graphics& g)
     g.setColour(CuteLookAndFeel::starlight());
     g.fillRoundedRectangle(bar.withTrimmedTop(bar.getHeight() * (1.0f - amount)), 5.0f);
     g.fillEllipse(levelThumb());
+
+    const auto panBar = panBounds();
+    g.setColour(CuteLookAndFeel::voidFill());
+    g.fillRoundedRectangle(panBar, 5.0f);
+    const float midX = panBar.getCentreX();
+    const float thumbX = panThumb().getCentreX();
+    auto panFill = juce::Rectangle<float>(juce::jmin(midX, thumbX), panBar.getY(),
+                                          std::abs(thumbX - midX), panBar.getHeight());
+    g.setColour(CuteLookAndFeel::starlight());
+    g.fillRoundedRectangle(panFill, 5.0f);
+    g.fillEllipse(panThumb());
 
     const auto wave = waveBounds();
     g.setColour(CuteLookAndFeel::voidFill());
@@ -403,8 +443,7 @@ void AdvancedDrawer::LaneRow::paint(juce::Graphics& g)
 
 void AdvancedDrawer::LaneRow::resized()
 {
-    auto bounds = getLocalBounds().toFloat();
-    muteButton.setBounds(juce::Rectangle<int>(10, (int) bounds.getCentreY() - 11, 22, 22));
+    muteButton.setBounds(juce::Rectangle<int>(8, 38, 22, 22));
     editor.setBounds(nameBounds().toNearestInt());
 }
 
@@ -436,6 +475,13 @@ void AdvancedDrawer::LaneRow::mouseDown(const juce::MouseEvent& e)
 
     if (onFinishOthers != nullptr)
         onFinishOthers();
+
+    if (inPan(e.position))
+    {
+        draggingPan = true;
+        setPanFromX(e.position.x);
+        return;
+    }
 
     if (inLevel(e.position))
     {
@@ -514,6 +560,12 @@ void AdvancedDrawer::LaneRow::mouseDown(const juce::MouseEvent& e)
 
 void AdvancedDrawer::LaneRow::mouseDrag(const juce::MouseEvent& e)
 {
+    if (draggingPan)
+    {
+        setPanFromX(e.position.x);
+        return;
+    }
+
     if (draggingLevel)
     {
         setLevelFromY(e.position.y);
@@ -545,11 +597,12 @@ void AdvancedDrawer::LaneRow::mouseDrag(const juce::MouseEvent& e)
 
 void AdvancedDrawer::LaneRow::mouseUp(const juce::MouseEvent&)
 {
-    if (draggingLevel || drag != Drag::None)
+    if (draggingPan || draggingLevel || drag != Drag::None)
     {
         if (onChanged != nullptr)
             onChanged();
     }
+    draggingPan = false;
     draggingLevel = false;
     drag = Drag::None;
     setMouseCursor(juce::MouseCursor::NormalCursor);
@@ -573,7 +626,7 @@ void AdvancedDrawer::LaneRow::mouseMove(const juce::MouseEvent& e)
                                && std::abs(e.position.x - clip.getRight()) <= (float) edgeHit)
                               || (wave.contains(juce::Point<float>(clip.getX(), e.position.y))
                                   && std::abs(e.position.x - clip.getX()) <= (float) edgeHit));
-    if (hot || inLevel(e.position))
+    if (hot || inLevel(e.position) || inPan(e.position))
         setMouseCursor(juce::MouseCursor::PointingHandCursor);
     else if (nearEdge)
         setMouseCursor(juce::MouseCursor::LeftRightResizeCursor);
@@ -594,6 +647,22 @@ void AdvancedDrawer::LaneRow::mouseExit(const juce::MouseEvent&)
 
 void AdvancedDrawer::LaneRow::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
 {
+    if (inPan(e.position) && tape != nullptr)
+    {
+        float delta = wheel.deltaX != 0.0f ? wheel.deltaX : wheel.deltaY;
+        if (wheel.isReversed)
+            delta = -delta;
+        const float step = delta > 0.0f ? 0.05f : (delta < 0.0f ? -0.05f : 0.0f);
+        if (step != 0.0f)
+        {
+            tape->setPan(index, tape->getPan(index) + step);
+            if (onChanged != nullptr)
+                onChanged();
+            repaint();
+        }
+        return;
+    }
+
     if (inLevel(e.position) && tape != nullptr)
     {
         float delta = wheel.deltaY != 0.0f ? wheel.deltaY : wheel.deltaX;
@@ -631,7 +700,7 @@ void AdvancedDrawer::LaneRow::startNameEdit()
 
     editing = true;
     if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
-        editor.setFont(laf->font(14.0f, true));
+        editor.setFont(laf->font(16.0f, true));
     editor.setText(tape->getName(index), juce::dontSendNotification);
     editor.setVisible(true);
     editor.grabKeyboardFocus();

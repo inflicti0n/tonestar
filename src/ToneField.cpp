@@ -71,49 +71,6 @@ juce::Rectangle<float> ToneField::fxLabelBounds(int index) const
     return { p.x - 44.0f, p.y - 14.0f, 88.0f, 28.0f };
 }
 
-juce::Path ToneField::fxValuePath() const
-{
-    const auto c = fieldCentre();
-    const float zeroR = fxZeroRadius();
-    const float span = juce::jmax(1.0f, fxFullRadius() - zeroR);
-    constexpr int steps = 16;
-
-    std::array<float, 8> radii {};
-    for (int i = 0; i < FxRack::numJobs; ++i)
-        radii[(size_t) i] = zeroR + juce::jlimit(0.0f, 1.0f, fxDisplay[(size_t) i]) * span;
-
-    juce::Path path;
-
-    for (int i = 0; i < FxRack::numJobs; ++i)
-    {
-        const int j = (i + 1) % FxRack::numJobs;
-        const float a0 = fxAngle(i);
-        float a1 = fxAngle(j);
-        if (a1 <= a0)
-            a1 += juce::MathConstants<float>::twoPi;
-
-        const float r0 = radii[(size_t) i];
-        const float r1 = radii[(size_t) j];
-
-        for (int s = 0; s < steps; ++s)
-        {
-            const float t = (float) s / (float) steps;
-            const float ease = t * t * (3.0f - 2.0f * t);
-            const float r = juce::jmax(zeroR, r0 + (r1 - r0) * ease);
-            const float a = a0 + (a1 - a0) * t;
-            const juce::Point<float> p { c.x + std::cos(a) * r, c.y + std::sin(a) * r };
-
-            if (i == 0 && s == 0)
-                path.startNewSubPath(p);
-            else
-                path.lineTo(p);
-        }
-    }
-
-    path.closeSubPath();
-    return path;
-}
-
 float ToneField::projectToFx(juce::Point<float> p, int index) const
 {
     const auto c = fieldCentre();
@@ -190,6 +147,61 @@ void ToneField::setBloomShimmer(bool shouldShimmer, bool notify)
     repaint();
 }
 
+void ToneField::setFieldEnergy(FieldEnergy next)
+{
+    star.setFieldEnergy(next);
+}
+
+void ToneField::setFieldSpectrum(const FieldSpectrum& next)
+{
+    spectrum = next;
+}
+
+void ToneField::setPlasmaLook(const PlasmaLook& next)
+{
+    look = next;
+    star.setPlasmaLook(next);
+}
+
+float ToneField::fxRadiusAtUnit(float t) const
+{
+    t -= std::floor(t);
+    const float f = t * (float) FxRack::numJobs;
+    const int i = ((int) std::floor(f)) % FxRack::numJobs;
+    const int j = (i + 1) % FxRack::numJobs;
+    const float u = f - std::floor(f);
+    const float ease = u * u * (3.0f - 2.0f * u);
+    const float zeroR = fxZeroRadius();
+    const float span = juce::jmax(1.0f, fxFullRadius() - zeroR);
+    const float r0 = zeroR + juce::jlimit(0.0f, 1.0f, fxDisplay[(size_t) i]) * span;
+    const float r1 = zeroR + juce::jlimit(0.0f, 1.0f, fxDisplay[(size_t) j]) * span;
+    return r0 + (r1 - r0) * ease;
+}
+
+float ToneField::fxAngleAtUnit(float t) const
+{
+    t -= std::floor(t);
+    const float f = t * (float) FxRack::numJobs;
+    const int i = ((int) std::floor(f)) % FxRack::numJobs;
+    const int j = (i + 1) % FxRack::numJobs;
+    const float u = f - std::floor(f);
+    const float a0 = fxAngle(i);
+    float a1 = fxAngle(j);
+    if (a1 <= a0)
+        a1 += juce::MathConstants<float>::twoPi;
+    return a0 + (a1 - a0) * u;
+}
+
+float ToneField::spectrumAt(float t) const
+{
+    t -= std::floor(t);
+    const float x = t * (float) FieldSpectrum::bins;
+    const int i0 = ((int) std::floor(x)) & (FieldSpectrum::bins - 1);
+    const int i1 = (i0 + 1) & (FieldSpectrum::bins - 1);
+    const float u = x - std::floor(x);
+    return spectrumShown.mag[(size_t) i0] + (spectrumShown.mag[(size_t) i1] - spectrumShown.mag[(size_t) i0]) * u;
+}
+
 juce::String ToneField::getActiveName() const
 {
     if (focusKind == Focus::Fx)
@@ -235,7 +247,19 @@ void ToneField::tick()
         }
     }
 
-    if (dirty)
+    const float dt = 1.0f / 60.0f;
+    ringTime += dt;
+
+    const float followUp = juce::jlimit(0.25f, 0.95f, 1.0f - look.ringSmooth * 0.45f);
+    const float followDn = juce::jlimit(0.10f, 0.70f, 1.0f - look.ringSmooth);
+    for (int i = 0; i < FieldSpectrum::bins; ++i)
+    {
+        const float next = spectrum.mag[(size_t) i];
+        auto& shown = spectrumShown.mag[(size_t) i];
+        shown += (next - shown) * (next > shown ? followUp : followDn);
+    }
+
+    if (isShowing() && (dirty || look.ringAmount > 0.01f || look.ringIdle > 0.01f))
         repaint();
 }
 
@@ -414,18 +438,7 @@ void ToneField::paintOverChildren(juce::Graphics& g)
     const auto c = fieldCentre();
     const float zeroR = fxZeroRadius();
     if (zeroR >= 4.0f)
-    {
-        const auto outer = fxValuePath();
-        juce::Path band;
-        band.addPath(outer);
-        band.addEllipse(c.x - zeroR, c.y - zeroR, zeroR * 2.0f, zeroR * 2.0f);
-        band.setUsingNonZeroWinding(false);
-        g.setColour(CuteLookAndFeel::peach().withAlpha(0.38f));
-        g.fillPath(band);
-        g.setColour(CuteLookAndFeel::rose().withAlpha(0.7f));
-        g.strokePath(outer, juce::PathStrokeType(1.8f, juce::PathStrokeType::curved,
-                                                 juce::PathStrokeType::rounded));
-    }
+        paintFxSpectrum(g);
 
     for (int i = 0; i < FxRack::numJobs; ++i)
     {
@@ -442,5 +455,93 @@ void ToneField::paintOverChildren(juce::Graphics& g)
         g.setColour(active ? CuteLookAndFeel::rose() : CuteLookAndFeel::mutedInk());
         g.setFont(juce::FontOptions(13.0f, juce::Font::bold));
         g.drawText(name, label, juce::Justification::centred, false);
+    }
+}
+
+void ToneField::paintFxSpectrum(juce::Graphics& g)
+{
+    if (! isShowing())
+        return;
+
+    const auto c = fieldCentre();
+    const float zeroR = fxZeroRadius();
+    const float span = juce::jmax(1.0f, fxFullRadius() - zeroR);
+    constexpr int points = 128;
+    std::array<juce::Point<float>, points + 1> osc {};
+    std::array<float, points + 1> level {};
+
+    float treble = 0.0f;
+    constexpr int trebleFrom = FieldSpectrum::bins * 2 / 3;
+    for (int i = trebleFrom; i < FieldSpectrum::bins; ++i)
+        treble += spectrumShown.mag[(size_t) i];
+    treble /= (float) juce::jmax(1, FieldSpectrum::bins - trebleFrom);
+    treble = juce::jlimit(0.0f, 1.0f, treble * look.ringGain);
+
+    auto hash01 = [] (int n) -> float
+    {
+        unsigned x = (unsigned) n * 747796405u + 2891336453u;
+        x = (x ^ (x >> 16)) * 0x45d9f3bu;
+        return (float) (x & 0xffffu) / 65535.0f;
+    };
+
+    for (int i = 0; i <= points; ++i)
+    {
+        const float t = (float) i / (float) points;
+        const float a = fxAngleAtUnit(t);
+        const float baseR = fxRadiusAtUnit(t);
+        const float spec = juce::jlimit(0.0f, 1.0f, spectrumAt(t) * look.ringGain);
+        const float bass = juce::jlimit(0.0f, 1.0f, 1.0f - t * 1.6f);
+        const float high = t * t;
+        const float h1 = hash01(i);
+        const float h2 = hash01(i * 19 + 7);
+        const float h3 = hash01(i * 47 + 31);
+        const float waveA = std::sin(ringTime * (2.5f + 2.4f * h1) + a * (9.0f + 7.0f * h2) + h1 * 6.28318f);
+        const float waveB = std::sin(ringTime * (4.6f + 3.8f * h2) - a * (16.0f + 10.0f * h1) + h2 * 4.2f);
+        const float waveC = std::sin(ringTime * (7.8f + 5.5f * h3) + a * 23.0f + (float) i * 0.41f);
+        const float surface = 0.48f * waveA + 0.34f * waveB + 0.18f * waveC;
+        const float idle = look.ringIdle * span * 0.055f * surface;
+        const float kick = look.ringAmount * spec * span * (0.38f + 0.55f * spec);
+        const float shake = look.ringAmount * (0.28f + 0.72f * spec) * span * 0.11f * surface;
+        const float flutter = look.ringAmount * spec * high * span * 0.22f
+                              * std::sin(ringTime * (12.0f + 28.0f * high + 6.0f * h3) + a * (11.0f + 8.0f * h1));
+        const float throb = look.ringAmount * bass * spec * span * 0.10f
+                            * std::sin(ringTime * (4.8f + 2.2f * h2) + a * (5.0f + 4.0f * h3));
+        const float spray = look.ringAmount * treble * high * span * 0.14f
+                            * std::sin(ringTime * (18.0f + 10.0f * h1) + a * 19.0f + h3 * 6.28318f);
+        const float r = juce::jmax(zeroR * 0.88f, baseR + kick + idle + shake + flutter + throb + spray);
+        osc[(size_t) i] = { c.x + std::cos(a) * r, c.y + std::sin(a) * r };
+        level[(size_t) i] = juce::jlimit(0.0f, 1.0f, spec * (0.75f + 0.45f * high) + treble * high * 0.25f);
+    }
+
+    if (look.ringFill > 0.001f)
+    {
+        juce::Path band;
+        band.startNewSubPath(osc[0]);
+        for (int i = 1; i <= points; ++i)
+            band.lineTo(osc[(size_t) i]);
+        band.closeSubPath();
+        band.addEllipse(c.x - zeroR, c.y - zeroR, zeroR * 2.0f, zeroR * 2.0f);
+        band.setUsingNonZeroWinding(false);
+        g.setColour(look.ringLine.withMultipliedAlpha(look.ringFill * 0.55f));
+        g.fillPath(band);
+    }
+
+    if (look.ringGlow > 0.001f)
+    {
+        juce::Path glow;
+        glow.startNewSubPath(osc[0]);
+        for (int i = 1; i <= points; ++i)
+            glow.lineTo(osc[(size_t) i]);
+        g.setColour(look.ringAura.withMultipliedAlpha(juce::jlimit(0.0f, 1.0f, look.ringGlow * 0.55f)));
+        g.strokePath(glow, juce::PathStrokeType(look.ringThick * 3.1f, juce::PathStrokeType::curved,
+                                                juce::PathStrokeType::rounded));
+    }
+
+    for (int i = 0; i < points; ++i)
+    {
+        const float heat = juce::jlimit(0.0f, 1.0f, level[(size_t) i]);
+        const auto colour = look.ringLine.interpolatedWith(look.ringHot, heat * 0.85f);
+        g.setColour(colour);
+        g.drawLine({ osc[(size_t) i], osc[(size_t) i + 1] }, look.ringThick);
     }
 }

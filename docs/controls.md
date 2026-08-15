@@ -108,6 +108,7 @@ Clips live in `Documents/ToneStar/tape` as `track0.wav` … `track7.wav`. The WA
 | **Click clip** | Select it (starlight border). X or Delete / Backspace removes it |
 | **Mute** | Skip that lane in the mix |
 | **Level** | Vertical fader next to the name. How loud that lane is in playback and export |
+| **Pan** | Horizontal fader under the name. Shifts that lane left or right |
 | **Right-click name** | Rename. Click elsewhere to finish |
 | **Drag clip** | Move it on the timeline |
 | **Drag left / right edge** | Virtual crop. Right edge stays put when you crop the left. The WAV stays whole |

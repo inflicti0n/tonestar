@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(GuitarMonitor VERSION 0.1.0 LANGUAGES C CXX)
+project(ToneStar VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,16 +13,16 @@ FetchContent_Declare(JUCE
 )
 FetchContent_MakeAvailable(JUCE)
 
-juce_add_gui_app(GuitarMonitor
+juce_add_gui_app(ToneStar
     PRODUCT_NAME "ToneStar"
-    COMPANY_NAME "tonestar"
+    COMPANY_NAME "ToneStar"
     BUNDLE_ID com.tonestar.app
     VERSION 0.1.0
     ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.png"
     ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.png"
 )
 
-target_sources(GuitarMonitor PRIVATE
+target_sources(ToneStar PRIVATE
     src/Main.cpp
     src/MainComponent.cpp
     src/MainComponent.h
@@ -57,6 +57,19 @@ target_sources(GuitarMonitor PRIVATE
     src/ToneCompose.h
     src/Acoustics.h
     src/DebugLog.h
+    src/AppLog.cpp
+    src/AppLog.h
+    src/FieldEnergy.h
+    src/FieldSpectrum.h
+    src/SpectrumTap.cpp
+    src/SpectrumTap.h
+    src/StarPlasma.cpp
+    src/StarPlasma.h
+    src/FluidSim.cpp
+    src/FluidSim.h
+    src/PlasmaLook.h
+    src/PlasmaTune.cpp
+    src/PlasmaTune.h
     src/Loudness.h
 )
 
@@ -71,19 +84,20 @@ juce_add_binary_data(ToneStarData SOURCES
     assets/hrtf/NOTICE
 )
 
-target_compile_definitions(GuitarMonitor PRIVATE
+target_compile_definitions(ToneStar PRIVATE
     JUCE_ASIO=1
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_DISPLAY_SPLASH_SCREEN=0
-    JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:GuitarMonitor,JUCE_PRODUCT_NAME>"
-    JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:GuitarMonitor,JUCE_VERSION>"
+    JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:ToneStar,JUCE_PRODUCT_NAME>"
+    JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:ToneStar,JUCE_VERSION>"
 )
 
-target_link_libraries(GuitarMonitor PRIVATE
+target_link_libraries(ToneStar PRIVATE
     ToneStarData
     juce::juce_audio_utils
     juce::juce_dsp
+    juce::juce_gui_extra
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags
 )

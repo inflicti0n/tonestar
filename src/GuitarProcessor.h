@@ -3,6 +3,9 @@
 #include "Acoustics.h"
 #include "AmpVoice.h"
 #include "DebugLog.h"
+#include "FieldEnergy.h"
+#include "FieldSpectrum.h"
+#include "SpectrumTap.h"
 #include "FxRack.h"
 #include "LooperEngine.h"
 #include "TapeEngine.h"
@@ -85,6 +88,8 @@ public:
     float getBloomWetScale() const { return fx.getBloomWetScale(); }
     float getEchoWetScale() const { return fx.getEchoWetScale(); }
     float getPeak() const { return peak.exchange(0.0f, std::memory_order_relaxed); }
+    FieldEnergy getFieldEnergy() const;
+    FieldSpectrum getFieldSpectrum() const;
     bool takeClip() { return clipped.exchange(false, std::memory_order_relaxed); }
     DebugLog::Snapshot captureDebugSnapshot() const;
 
@@ -97,6 +102,12 @@ private:
     std::array<std::atomic<float>, 6> axes;
     mutable std::atomic<float> peak { 0.0f };
     std::atomic<bool> clipped { false };
+    std::atomic<float> fieldEnergyOut { 0.0f };
+    std::atomic<float> fieldPunchOut { 0.0f };
+    std::atomic<float> fieldBreathOut { 0.0f };
+    float fieldEnergyEnv = 0.0f;
+    float fieldPunchEnv = 0.0f;
+    float fieldBreathEnv = 0.08f;
 
     juce::AudioBuffer<float> monoBuffer;
     juce::AudioBuffer<float> stereoBuffer;
@@ -105,6 +116,7 @@ private:
     Acoustics acoustics;
     TapeEngine tape;
     LooperEngine looper;
+    SpectrumTap spectrum;
     std::atomic<DebugLog*> debugLog { nullptr };
     std::atomic<bool> metroOn { false };
     std::atomic<float> metroBpm { 120.0f };

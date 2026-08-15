@@ -6,6 +6,7 @@
 #include "CuteLookAndFeel.h"
 #include "GuitarProcessor.h"
 #include "LooperDrawer.h"
+#include "PlasmaTune.h"
 #include "PresetDrawer.h"
 #include "PresetStore.h"
 #include "ToneField.h"
@@ -21,6 +22,10 @@ class MainComponent : public juce::Component,
 public:
     MainComponent();
     ~MainComponent() override;
+    void startAudio();
+    void applyWindowSize();
+    void enableSelfTest();
+    void scheduleSelfTest();
 
     void paint(juce::Graphics&) override;
     void resized() override;
@@ -44,13 +49,16 @@ private:
     void flashSlugError();
     void showCurrentSlug();
     juce::String currentSlug() const;
-    void applyWindowSize();
     void startDebugLog();
     void stopDebugLog();
     bool isEditingText() const;
     bool looperPedalArmed() const;
     bool windowIsFocused() const;
     void releaseSpacePedal();
+    void togglePlasmaTune();
+    void runSelfTest();
+    int windowWidth() const;
+    int windowHeight() const;
 
     CuteLookAndFeel lookAndFeel;
     WindowChrome chrome;
@@ -63,6 +71,7 @@ private:
     PresetDrawer drawer { presetStore };
     AdvancedDrawer advanced;
     LooperDrawer looperDrawer;
+    PlasmaTune plasmaTune;
     juce::TooltipWindow tooltipWindow { this, 400 };
 
     juce::Label latencyLabel;
@@ -91,7 +100,10 @@ private:
     bool restoring = false;
     int preferredInputChannel = 0;
     bool advancedWasOpen = false;
+    bool applyingWindowSize = false;
     bool spacePedalDown = false;
+    bool selfTesting = false;
+    bool audioStartedOk = false;
     DebugLog debugLog;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
