@@ -84,6 +84,7 @@ private:
     CircleToggle muteButton { "Mute", CuteLookAndFeel::flare(), CircleIcon::Mute };
     CircleToggle binauralButton { "Binaural", CuteLookAndFeel::nova(), CircleIcon::Binaural };
     CircleToggle debugButton { "Debug", CuteLookAndFeel::starlight(), CircleIcon::Debug };
+    CircleToggle logsButton { "Open logs folder", CuteLookAndFeel::starlight(), CircleIcon::Folder };
     juce::TextButton devicesButton { "Devices" };
     juce::TextButton copyButton { "Copy" };
     juce::TextButton applyButton { "Apply" };

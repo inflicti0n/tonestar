@@ -91,8 +91,20 @@ MainComponent::MainComponent()
             startDebugLog();
         else
             stopDebugLog();
+        logsButton.setVisible(debugButton.getToggleState());
+        resized();
     };
     addAndMakeVisible(debugButton);
+
+    logsButton.setClickingTogglesState(false);
+    logsButton.onClick = []
+    {
+        auto dir = AppLog::directory();
+        dir.createDirectory();
+        dir.revealToUser();
+    };
+    addAndMakeVisible(logsButton);
+    logsButton.setVisible(false);
 
     chrome.presetsButton.onClick = [this]
     {
@@ -267,6 +279,26 @@ void MainComponent::startAudio()
     updateLatencyLabel();
     audioStartedOk = ok && deviceManager.getCurrentAudioDevice() != nullptr;
     AppLog::note(audioStartedOk ? "audio ready" : "audio ready without device");
+
+    if (auto* device = deviceManager.getCurrentAudioDevice())
+    {
+        const int nIn = juce::jmax(1, device->getActiveInputChannels().countNumberOfSetBits());
+        const auto names = device->getInputChannelNames();
+        juce::String listed;
+        for (int i = 0; i < nIn; ++i)
+        {
+            if (i > 0)
+                listed += ", ";
+            listed += i < names.size() ? names[i] : ("ch" + juce::String(i + 1));
+        }
+
+        AppLog::note("audio device=" + device->getName()
+                     + " sr=" + juce::String(device->getCurrentSampleRate(), 1)
+                     + " buffer=" + juce::String(device->getCurrentBufferSizeSamples())
+                     + " inputs=" + juce::String(nIn)
+                     + " selected=" + juce::String(inputChannelBox.getSelectedItemIndex() + 1)
+                     + (listed.isNotEmpty() ? " [" + listed + "]" : juce::String()));
+    }
 }
 
 MainComponent::~MainComponent()
@@ -902,6 +934,11 @@ void MainComponent::resized()
     binauralButton.setBounds(buttons.removeFromLeft(28));
     buttons.removeFromLeft(8);
     debugButton.setBounds(buttons.removeFromLeft(28));
+    if (logsButton.isVisible())
+    {
+        buttons.removeFromLeft(8);
+        logsButton.setBounds(buttons.removeFromLeft(28));
+    }
     devicesButton.setBounds(buttons.removeFromRight(88));
 }
 

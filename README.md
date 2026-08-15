@@ -22,14 +22,14 @@ No faceplate. No plugin host. Just the guitar, in.
 
 Open the drawers and the window grows around the star.
 
-- **Tape** on the left — eight-lane practice recorder with a metronome.
-- **Star** in the middle — amp, FX, cab, share code.
-- **Presets** on the right — saved tones, one double-click away.
-- **Looper** underneath — a phrase pedal after the tape.
+- **Tape** on the left: eight-lane practice recorder with a metronome.
+- **Star** in the middle: amp, FX, cab, share code.
+- **Presets** on the right: saved tones. Double-click one.
+- **Looper** underneath: a phrase pedal after the tape.
 
-**BPM metronome** lives on the tape strip. Turn the click on, set the tempo, and both tape and looper can lock to it.
+The **BPM metronome** lives on the tape strip. Turn the click on, set the tempo, and tape and looper can lock to it.
 
-**Binaural** is the extra for headphones. Flip it on and the cab sits in front of you, slightly down, instead of a flat mono-in-both-ears dump.
+**Binaural** is for headphones. Flip it on and the cab sits in front of you, a bit down, instead of sitting in the middle of your head.
 
 **Two loopers.** Simple is one phrase, like a Ditto. Advanced is two phrases, like an RC-500. Right-click the Looper title to switch.
 
@@ -43,7 +43,7 @@ Every click and gesture is in [docs/controls.md](docs/controls.md).
   <img src="screenshots/starmap.png" alt="The ToneStar starmap" width="480">
 </p>
 
-Center is already a playable amp. Each vertex is a job. Pull one, or stack a few — they rewrite one amp together.
+Center is already a playable amp. Each vertex is a job. Pull one, or stack a few. They rewrite one amp together.
 
 | Pull | You want |
 | --- | --- |
@@ -62,21 +62,21 @@ Shift-drag for fine moves. Double-click a spoke to zero it.
 
 ## FX ring
 
-The eight handles around the star are how much of that land. All start at zero. The live line on the ring is the mix — it follows the handles and moves with the guitar.
+The eight handles around the star are how much of that land. All start at zero. The live line on the ring is the mix. It follows the handles and moves with the guitar.
 
 **Before the amp** (listens to the clean string):
 
-- **Squeeze** — glue → sustain → squash
-- **Talk** — mild attack quack → full vocal sweep
-- **Shift** — fat low octave → 12-string → synth stack
+- **Squeeze**: glue to sustain to squash
+- **Talk**: mild attack quack to a full vocal sweep
+- **Shift**: fat low octave to 12-string to synth stack
 
 **After the amp** (sits on the finished tone):
 
-- **Echo** — slapback → dotted rhythm → shoegaze wash
-- **Bloom** — kiss of spring → plate → cloud
-- **Width** — slow thicken → deeper chorus
-- **Sweep** — phaser → flange
-- **Pulse** — soft throb → hard trem chop
+- **Echo**: slapback to dotted rhythm to shoegaze wash
+- **Bloom**: kiss of spring to plate to cloud
+- **Width**: slow thicken to a deeper chorus
+- **Sweep**: phaser to flange
+- **Pulse**: soft throb to a hard trem chop
 
 Right-click the **Bloom** label for **Shimmer**. Same handle, octave-up on the tail.
 
@@ -88,9 +88,9 @@ Right-click the **Bloom** label for **Shimmer**. Same handle, octave-up on the t
   <img src="screenshots/preset.png" alt="Share a ToneStar preset with a code" width="480">
 </p>
 
-Easily share a preset via a code. Copy the slug, send it, paste it, hit **Apply** — the starmap, FX, shimmer, binaural, and cab snap into place.
+Share a preset with a code. Copy the slug, send it, paste it, hit **Apply**. The starmap, FX, shimmer, binaural, and cab snap into place.
 
-Store and load as many presets as you want. Open the drawer, hit **+** to save the current tone, **double-click** to load one instantly. Right-click to rename. X to delete.
+Open the drawer, hit **+** to save the current tone, **double-click** to load one. Right-click to rename. X to delete. Keep as many as you want.
 
 In, Out, mute, and your audio device stay as they are. The code is the sound, not the room.
 
@@ -102,11 +102,13 @@ In, Out, mute, and your audio device stay as they are. The code is the sound, no
   <img src="screenshots/tape-track.png" alt="Eight-lane tape recorder" width="720">
 </p>
 
-Eight-lane linear practice tape, after Out. Click a track to arm it. Hit record. Play it back. Quantization is supported — **Q** waits for the next beat to start and closes on a beat, and moves and trims snap to the grid.
+Eight-lane linear practice tape, after Out. Click a track to arm it. Hit record. Play it back.
+
+**Q** waits for the next beat to start and closes on a beat. Moves and trims snap to the grid.
 
 Loop a range with the **Loop** button, then record over a track while the others play. Mute lanes you do not want in the mix. Each track has **L/R pan** and its own **volume**.
 
-Rename a lane. Drag a clip. Crop either edge — the WAV stays whole. The click and BPM sit at the bottom of the strip.
+Rename a lane. Drag a clip. Crop either edge. The WAV stays whole. The click and BPM sit at the bottom of the strip.
 
 Clips live in `Documents/ToneStar/tape`.
 
@@ -118,9 +120,9 @@ Clips live in `Documents/ToneStar/tape`.
   <img src="screenshots/export.png" alt="Export a 24-bit WAV" width="360">
 </p>
 
-Seamlessly export to **24-bit stereo WAV**. Same mix as playback — unmuted lanes, pans, levels.
+Export a **24-bit stereo WAV**. Same mix as playback: unmuted lanes, pans, levels.
 
-Pick the range you want (**Start** and **Length** in seconds). One click on **Export WAV** and you are done.
+Pick the range (**Start** and **Length** in seconds). One click on **Export WAV**.
 
 ---
 
@@ -128,14 +130,14 @@ Pick the range you want (**Start** and **Length** in seconds). One click on **Ex
 
 The looper sits after Out and Tape. Live guitar always passes through. Mute silences the speakers; the playhead keeps walking. **Space** is the pedal while ToneStar is focused.
 
-**Simple** (default) — one phrase, Ditto / RC-1 style.
+**Simple** (default): one phrase, Ditto / RC-1 style.
 
-- Tap: empty → record → play → overdub → play
+- Tap: empty to record to play to overdub to play
 - Double-tap: stop (or discard if you are still on the first take)
 - Hold: undo / redo the last layer, or clear when stopped
-- **Q** — free length, or wait for the beat
+- **Q**: free length, or wait for the beat
 
-**Advanced** — right-click the Looper title. Two phrases, like an RC-500. Each has rec/play, stop, and level. The first closed phrase is master; the second locks to its length and waits for the downbeat.
+**Advanced**: right-click the Looper title. Two phrases, like an RC-500. Each has rec/play, stop, and level. The first closed phrase is master. The second locks to its length and waits for the downbeat.
 
 ---
 
@@ -155,7 +157,7 @@ The cab is always on, under the star. Three sizes. Open or closed back.
   <strong>Combo</strong> &nbsp;·&nbsp; <strong>Twin</strong> &nbsp;·&nbsp; <strong>Stack</strong>
 </p>
 
-Wheel or click **Size** to step Combo → Twin → Stack. Right-click **Back** for **Open** vs **Closed** — open air versus a sealed box.
+Wheel or click **Size** to step Combo, Twin, Stack. Right-click **Back** for **Open** or **Closed**. Open air or a sealed box.
 
 **Binaural** uses a SADIE II HRTF so headphones hear that cab in front of you, not in the middle of your head.
 
@@ -169,13 +171,23 @@ Wheel or click **Size** to step Combo → Twin → Stack. Right-click **Back** f
 
 **In** is how hard you hit the amp. **Out** is loudness. **Mute** silences the speakers without stopping tape or the looper.
 
-**Devices** picks the interface. Use the same device for input and output. On Windows that is ASIO duplex — turn Direct Monitor **off** or you will hear double. On Mac it is Core Audio.
+**Devices** picks the interface. Use the same device for input and output. On Windows that is ASIO duplex. Turn Direct Monitor **off** or you will hear double. On Mac it is Core Audio.
+
+---
+
+## If something breaks
+
+Turn **Debug** on, play a bit, then click the folder button next to it. Send that whole ToneStar folder. Do not pick files out of it.
+
+- Windows: `%APPDATA%\ToneStar`
+- Mac: `~/Library/Application Support/ToneStar`
+- Linux: `~/.config/ToneStar`
 
 ---
 
 ## Mac
 
-Apple Silicon only, unsigned. GitHub → **Actions** → **Mac** → **Run workflow**. Download `ToneStar-mac-arm64.zip`, unzip, right-click **ToneStar** → **Open**.
+Apple Silicon only, unsigned. GitHub, **Actions**, **Mac**, **Run workflow**. Download `ToneStar-mac-arm64.zip`, unzip, right-click **ToneStar**, **Open**.
 
 Not notarized. Intel Macs are not built.
 
