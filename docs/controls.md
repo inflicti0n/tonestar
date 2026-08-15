@@ -74,9 +74,9 @@ Always on, under the star. Poke the box.
 
 ---
 
-## Chrome
+## Appearance
 
-Void page, solid fills, no outlines. Space Grotesk on the title, Gaegu on the chrome.
+Void page, solid fills, no outlines. Space Grotesk on the title, Gaegu on the rest of the UI.
 
 | Control | Does |
 | --- | --- |
@@ -118,6 +118,7 @@ Clips live in `Documents/ToneStar/tape` as `track0.wav` … `track7.wav`. The WA
 | **Metronome** | Enable dry clicks |
 | **BPM** | Click to type, hold-drag, or scroll |
 | **Sparkle** | Pulses on each click |
+| **Tuner** | Toggle on the right. Dry input, A440. Shows `A2 110 Hz` and a dot vs the center line so you can tune a string. Off does not chase what you play |
 
 ## Looper
 
