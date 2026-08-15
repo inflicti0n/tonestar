@@ -1,0 +1,29 @@
+name: Mac
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  mac-arm64:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: bash scripts/build-mac.sh
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: ToneStar-mac-arm64
+          path: dist/ToneStar-mac-arm64.zip
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/ToneStar-mac-arm64.zip

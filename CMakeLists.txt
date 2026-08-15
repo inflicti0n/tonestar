@@ -20,6 +20,9 @@ juce_add_gui_app(ToneStar
     VERSION 0.1.0
     ICON_BIG "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.png"
     ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon.png"
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "ToneStar needs the guitar input."
+    HARDENED_RUNTIME_ENABLED FALSE
 )
 
 target_sources(ToneStar PRIVATE
@@ -85,7 +88,7 @@ juce_add_binary_data(ToneStarData SOURCES
 )
 
 target_compile_definitions(ToneStar PRIVATE
-    JUCE_ASIO=1
+    $<$<BOOL:${WIN32}>:JUCE_ASIO=1>
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_DISPLAY_SPLASH_SCREEN=0

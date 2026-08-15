@@ -169,13 +169,15 @@ Wheel or click **Size** to step Combo → Twin → Stack. Right-click **Back** f
 
 **In** is how hard you hit the amp. **Out** is loudness. **Mute** silences the speakers without stopping tape or the looper.
 
-**Devices** picks the interface. Use the same device for input and output (ASIO duplex). Turn Direct Monitor **off** or you will hear double.
+**Devices** picks the interface. Use the same device for input and output. On Windows that is ASIO duplex — turn Direct Monitor **off** or you will hear double. On Mac it is Core Audio.
 
 ---
 
-## Look
+## Mac
 
-Ctrl+Shift+P opens a hidden plasma tune panel — colors and motion for the star fluid and the FX ring. Save it, or leave it alone. The amp does not care.
+Apple Silicon only, unsigned. GitHub → **Actions** → **Mac** → **Run workflow**. Download `ToneStar-mac-arm64.zip`, unzip, right-click **ToneStar** → **Open**.
+
+Not notarized. Intel Macs are not built.
 
 ---
 
@@ -200,7 +202,13 @@ cmake -S . -B build
 cmake --build build --config Release --target ToneStar
 ```
 
-JUCE 8.0.15 is fetched at configure time.
+On a Mac:
+
+```bash
+bash scripts/build-mac.sh
+```
+
+That writes `dist/ToneStar-mac-arm64.zip`. JUCE 8.0.15 is fetched at configure time.
 
 ## Licence
 
