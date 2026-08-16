@@ -108,7 +108,10 @@ public:
     FieldEnergy getFieldEnergy() const;
     FieldSpectrum getFieldSpectrum() const;
     bool takeClip() { return clipped.exchange(false, std::memory_order_relaxed); }
+    int getPreparedMaxBlock() const { return preparedMaxBlock; }
     DebugLog::Snapshot captureDebugSnapshot() const;
+
+    static constexpr int minPrepareBlock = 2048;
 
 private:
 
@@ -151,6 +154,7 @@ private:
     std::atomic<float> metroBpm { 120.0f };
     std::atomic<float> metroPulse { 0.0f };
     double currentSampleRate = 48000.0;
+    int preparedMaxBlock = minPrepareBlock;
     double metroSample = 0.0;
     int clickSample = 100000;
     int beatIndex = 3;

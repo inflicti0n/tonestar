@@ -150,8 +150,11 @@ FieldSpectrum GuitarProcessor::getFieldSpectrum() const
 
 void GuitarProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    monoBuffer.setSize(1, samplesPerBlock);
-    stereoBuffer.setSize(2, samplesPerBlock);
+    preparedMaxBlock = juce::jmax(minPrepareBlock, samplesPerBlock);
+    monoBuffer.setSize(1, preparedMaxBlock);
+    stereoBuffer.setSize(2, preparedMaxBlock);
+    dryTap.setSize(1, preparedMaxBlock);
+    vocalScratch.setSize(1, preparedMaxBlock);
 
     currentSampleRate = sampleRate;
     clickLength = juce::jmax(32, (int) std::round(sampleRate * 0.008));
@@ -159,23 +162,24 @@ void GuitarProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     clickSample = clickLength;
     beatIndex = 3;
 
-    juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock, 1 };
+    juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) preparedMaxBlock, 1 };
     engine.prepare(spec);
     fx.prepare(spec);
     acoustics.prepare(spec);
-    liveVocal.prepare(sampleRate, samplesPerBlock);
-    exportVocal.prepare(sampleRate, samplesPerBlock);
+    liveVocal.prepare(sampleRate, preparedMaxBlock);
+    exportVocal.prepare(sampleRate, preparedMaxBlock);
     for (auto& voice : laneVocals)
-        voice.prepare(sampleRate, samplesPerBlock);
-    tape.prepare(sampleRate, samplesPerBlock);
+        voice.prepare(sampleRate, preparedMaxBlock);
+    tape.prepare(sampleRate, preparedMaxBlock);
     tape.setThroughRender([this] (const VocalStamp& stamp, juce::AudioBuffer<float>& mono, float bpm)
     {
         renderVocal(mono, stamp, bpm);
     });
-    looper.prepare(sampleRate, samplesPerBlock);
+    looper.prepare(sampleRate, preparedMaxBlock);
     tuner.prepare(sampleRate);
-    AppLog::note("processor prepare " + juce::String(sampleRate, 0)
-                 + " / " + juce::String(samplesPerBlock));
+    AppLog::note("prepare sr=" + juce::String(sampleRate, 0)
+                 + " deviceBlock=" + juce::String(samplesPerBlock)
+                 + " maxBlock=" + juce::String(preparedMaxBlock));
     spectrum.prepare(sampleRate);
 
     fieldEnergyEnv = 0.0f;
@@ -235,6 +239,7 @@ DebugLog::Snapshot GuitarProcessor::captureDebugSnapshot() const
 void GuitarProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
+    const double startedAt = juce::Time::getMillisecondCounterHiRes();
 
     const int numSamples = buffer.getNumSamples();
     const int numIns = buffer.getNumChannels();
@@ -243,14 +248,10 @@ void GuitarProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     if (numSamples == 0 || numIns == 0)
         return;
 
-    if (monoBuffer.getNumSamples() < numSamples)
-        monoBuffer.setSize(1, numSamples, false, false, true);
-    if (stereoBuffer.getNumSamples() < numSamples)
-        stereoBuffer.setSize(2, numSamples, false, false, true);
-    if (dryTap.getNumSamples() < numSamples)
-        dryTap.setSize(1, numSamples, false, false, true);
-    if (vocalScratch.getNumChannels() != 1 || vocalScratch.getNumSamples() != numSamples)
-        vocalScratch.setSize(1, numSamples, false, false, true);
+    monoBuffer.setSize(1, numSamples, false, false, true);
+    stereoBuffer.setSize(2, numSamples, false, false, true);
+    dryTap.setSize(1, numSamples, false, false, true);
+    vocalScratch.setSize(1, numSamples, false, false, true);
 
     const int inCh = juce::jlimit(0, numIns - 1, inputChannel.load(std::memory_order_relaxed));
     const float inGain = juce::Decibels::decibelsToGain(inputGainDb.load(std::memory_order_relaxed));
@@ -464,7 +465,10 @@ void GuitarProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     {
         peaks[5] = outPeak;
         rms[5] = outRms;
-        log->noteBlock(peaks, rms, numSamples, captureDebugSnapshot());
+        const double elapsedMs = juce::Time::getMillisecondCounterHiRes() - startedAt;
+        const int cbUs = juce::jmax(0, (int) std::lround(elapsedMs * 1000.0));
+        log->noteBlock(peaks, rms, numSamples, cbUs, preparedMaxBlock, currentSampleRate,
+                       captureDebugSnapshot());
     }
 
     for (int ch = numOuts; ch < numIns; ++ch)

@@ -43,7 +43,10 @@ void TapeEngine::prepare(double sampleRateToUse, int samplesPerBlock)
     sampleRate = sampleRateToUse > 0.0 ? sampleRateToUse : 48000.0;
     maxSamples = juce::jmax(1, (int) std::round(sampleRate * maxSeconds));
     minSamples = juce::jmax(1, (int) std::round(sampleRate * 0.05));
-    guitar.setSize(2, juce::jmax(samplesPerBlock, 512), false, false, true);
+    const int block = juce::jmax(samplesPerBlock, 512);
+    guitar.setSize(2, block, false, false, true);
+    for (int i = 0; i < numLanes; ++i)
+        throughDry[i].setSize(1, block, false, false, true);
 }
 
 void TapeEngine::reset()

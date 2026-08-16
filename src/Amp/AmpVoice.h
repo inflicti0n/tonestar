@@ -4,19 +4,23 @@
 #include "Amp/ToneCompose.h"
 
 #include <juce_dsp/juce_dsp.h>
+#include <juce_events/juce_events.h>
 #include <cmath>
 
-class AmpEngine
+class AmpEngine : private juce::AsyncUpdater
 {
 public:
     static constexpr int probeLength = 1536;
     static constexpr int probePreRoll = 256;
     static constexpr size_t oversampleStages = 2;
 
+    ~AmpEngine() override { cancelPendingUpdate(); }
+
     float getMakeup() const { return lastMakeup; }
 
     void prepare(const juce::dsp::ProcessSpec& spec)
     {
+        cancelPendingUpdate();
         sampleRate = spec.sampleRate;
         maxBlock = juce::jmax(32, (int) spec.maximumBlockSize);
         prepareFilters(hpf, lowMid, mid, presence, fizz, cab, spec);
@@ -36,17 +40,22 @@ public:
         buildPinkProbe();
         sag = 0.0f;
         sagLp = 0.0f;
+        probeSagLp = 0.0f;
         gateEnv = 0.0f;
-        lastProbed = {};
-        lastProbed.drive1 = -1.0f;
         smoothed = baseParams();
-        smoothed.makeup = makeupFromParams(smoothed);
-        lastMakeup = smoothed.makeup;
+        lastProbed = smoothed;
+        lastCoeff = smoothed;
+        pendingProbe = smoothed;
+        AmpParams probed = smoothed;
+        probed.makeup = 1.0f;
+        lastMakeup = measureProbe(probed);
+        smoothed.makeup = lastMakeup;
         updateCoeffs(hpf, lowMid, mid, presence, fizz, cab, smoothed);
     }
 
     void reset()
     {
+        cancelPendingUpdate();
         resetFilters(hpf, lowMid, mid, presence, fizz, cab);
         resetFilters(probeHpf, probeLowMid, probeMid, probePresence, probeFizz, probeCab);
         dryWeight.reset();
@@ -55,11 +64,13 @@ public:
         probeOs.reset();
         sag = 0.0f;
         sagLp = 0.0f;
+        probeSagLp = 0.0f;
         gateEnv = 0.0f;
-        lastProbed.drive1 = -1.0f;
         smoothed = baseParams();
-        smoothed.makeup = makeupFromParams(smoothed);
-        lastMakeup = smoothed.makeup;
+        lastProbed = smoothed;
+        lastCoeff = smoothed;
+        pendingProbe = smoothed;
+        smoothed.makeup = lastMakeup;
     }
 
     void process(juce::AudioBuffer<float>& buffer, const AmpParams& target)
@@ -69,9 +80,8 @@ public:
         if (paramsMoved(aimed, lastProbed))
         {
             lastProbed = aimed;
-            AmpParams probed = aimed;
-            probed.makeup = 1.0f;
-            lastMakeup = measureProbe(probed);
+            pendingProbe = aimed;
+            triggerAsyncUpdate();
         }
 
         aimed.makeup = lastMakeup;
@@ -80,7 +90,11 @@ public:
                               / juce::jmax(1.0f, (float) sampleRate);
         const float coeff = 1.0f - std::exp(-blockMs / 12.0f);
         smoothed = lerpParams(smoothed, aimed, coeff);
-        updateCoeffs(hpf, lowMid, mid, presence, fizz, cab, smoothed);
+        if (paramsMoved(smoothed, lastCoeff))
+        {
+            lastCoeff = smoothed;
+            updateCoeffs(hpf, lowMid, mid, presence, fizz, cab, smoothed);
+        }
 
         juce::dsp::AudioBlock<float> block(buffer);
         juce::dsp::ProcessContextReplacing<float> context(block);
@@ -187,15 +201,16 @@ private:
         dryWeight.reset();
     }
 
+    void handleAsyncUpdate() override
+    {
+        AmpParams probed = pendingProbe;
+        probed.makeup = 1.0f;
+        lastMakeup = measureProbe(probed);
+    }
+
     float measureProbe(const AmpParams& p)
     {
-        const float savedSag = sag;
-        const float savedLp = sagLp;
-        const float savedGate = gateEnv;
-        sag = 0.0f;
-        sagLp = 0.0f;
-        gateEnv = 0.0f;
-
+        probeSagLp = 0.0f;
         probeWet.makeCopyOf(probeDry);
         resetFilters(probeHpf, probeLowMid, probeMid, probePresence, probeFizz, probeCab);
         updateCoeffs(probeHpf, probeLowMid, probeMid, probePresence, probeFizz, probeCab, p);
@@ -210,10 +225,6 @@ private:
         probePresence.process(context);
         probeFizz.process(context);
         probeCab.process(context);
-
-        sag = savedSag;
-        sagLp = savedLp;
-        gateEnv = savedGate;
 
         const int count = probeLength - probePreRoll;
         const float wetPeak = juce::jmax(probeWet.getMagnitude(0, probePreRoll, count), 1.0e-6f);
@@ -270,16 +281,17 @@ private:
                 }
             }
 
+            float& lp = live ? sagLp : probeSagLp;
             if (dark > 0.001f)
             {
                 const float hz = juce::jmap(juce::jlimit(0.0f, 1.0f, dark), 11000.0f, 2200.0f);
                 const float a = 1.0f - std::exp(-juce::MathConstants<float>::twoPi * hz / (float) sr);
-                sagLp += a * (x - sagLp);
-                x = sagLp;
+                lp += a * (x - lp);
+                x = lp;
             }
             else
             {
-                sagLp = x;
+                lp = x;
             }
 
             x = softStage(x * p.drive1);
@@ -322,8 +334,9 @@ private:
     juce::AudioBuffer<float> probeDry, probeWet;
     float sag = 0.0f;
     float sagLp = 0.0f;
+    float probeSagLp = 0.0f;
     float gateEnv = 0.0f;
     float lastMakeup = 1.0f;
     float dryProbeRms = 1.0f;
-    AmpParams smoothed, lastProbed;
+    AmpParams smoothed, lastProbed, lastCoeff, pendingProbe;
 };

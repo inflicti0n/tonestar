@@ -50,7 +50,10 @@ public:
 
     void prepare(const juce::dsp::ProcessSpec& spec)
     {
-        sampleRate = spec.sampleRate;
+        const double newRate = spec.sampleRate;
+        const bool first = ! irsLoaded;
+        const bool rateChanged = first || std::abs(newRate - sampleRate) > 0.5;
+        sampleRate = newRate;
         maxBlock = juce::jmax(1, (int) spec.maximumBlockSize);
 
         work.setSize(1, maxBlock);
@@ -64,26 +67,30 @@ public:
 
         juce::dsp::ProcessSpec mono { spec.sampleRate, (juce::uint32) maxBlock, 1 };
 
-        cone.loadImpulseResponse(BinaryData::even_v30_sm57_wav,
-                                 (size_t) BinaryData::even_v30_sm57_wavSize,
-                                 juce::dsp::Convolution::Stereo::no,
-                                 juce::dsp::Convolution::Trim::no,
-                                 0,
-                                 juce::dsp::Convolution::Normalise::no);
-        cone.prepare(mono);
+        if (! irsLoaded)
+        {
+            cone.loadImpulseResponse(BinaryData::even_v30_sm57_wav,
+                                     (size_t) BinaryData::even_v30_sm57_wavSize,
+                                     juce::dsp::Convolution::Stereo::no,
+                                     juce::dsp::Convolution::Trim::no,
+                                     0,
+                                     juce::dsp::Convolution::Normalise::no);
+            earL.loadImpulseResponse(BinaryData::sadie_d2_front_L_wav,
+                                     (size_t) BinaryData::sadie_d2_front_L_wavSize,
+                                     juce::dsp::Convolution::Stereo::no,
+                                     juce::dsp::Convolution::Trim::no,
+                                     0,
+                                     juce::dsp::Convolution::Normalise::no);
+            earR.loadImpulseResponse(BinaryData::sadie_d2_front_R_wav,
+                                     (size_t) BinaryData::sadie_d2_front_R_wavSize,
+                                     juce::dsp::Convolution::Stereo::no,
+                                     juce::dsp::Convolution::Trim::no,
+                                     0,
+                                     juce::dsp::Convolution::Normalise::no);
+            irsLoaded = true;
+        }
 
-        earL.loadImpulseResponse(BinaryData::sadie_d2_front_L_wav,
-                                 (size_t) BinaryData::sadie_d2_front_L_wavSize,
-                                 juce::dsp::Convolution::Stereo::no,
-                                 juce::dsp::Convolution::Trim::no,
-                                 0,
-                                 juce::dsp::Convolution::Normalise::no);
-        earR.loadImpulseResponse(BinaryData::sadie_d2_front_R_wav,
-                                 (size_t) BinaryData::sadie_d2_front_R_wavSize,
-                                 juce::dsp::Convolution::Stereo::no,
-                                 juce::dsp::Convolution::Trim::no,
-                                 0,
-                                 juce::dsp::Convolution::Normalise::no);
+        cone.prepare(mono);
         earL.prepare(mono);
         earR.prepare(mono);
 
@@ -104,16 +111,20 @@ public:
         binauralMix.setCurrentAndTargetValue(0.0f);
         cabMakeupSmooth.reset(sampleRate, 0.025);
 
-        buildPinkProbe();
-        lastSize = -1.0f;
-        lastBack = -1.0f;
-        buildCabLut();
+        if (rateChanged)
+        {
+            buildPinkProbe();
+            lastSize = -1.0f;
+            lastBack = -1.0f;
+            buildCabLut();
+            measureHrtfMakeup();
+        }
+
         updateRecipe(true);
         const float startMakeup = lookupCabMakeup(cabSize.load(std::memory_order_relaxed),
                                                   cabBack.load(std::memory_order_relaxed));
         cabMakeupSmooth.setCurrentAndTargetValue(startMakeup);
         cabMakeup = startMakeup;
-        measureHrtfMakeup();
         reset();
     }
 
@@ -140,51 +151,19 @@ public:
 
     void process(const juce::AudioBuffer<float>& monoIn, juce::AudioBuffer<float>& stereoOut)
     {
-        const int n = juce::jmin(monoIn.getNumSamples(), maxBlock);
-        if (n <= 0 || stereoOut.getNumChannels() < 1)
+        const int total = juce::jmin(monoIn.getNumSamples(), stereoOut.getNumSamples());
+        if (total <= 0 || stereoOut.getNumChannels() < 1 || maxBlock <= 0)
             return;
 
         updateRecipe(false);
         binauralMix.setTargetValue(binaural.load(std::memory_order_relaxed) ? 1.0f : 0.0f);
 
-        work.copyFrom(0, 0, monoIn, 0, 0, n);
-        processCab(work, n);
-        cabMakeupSmooth.setTargetValue(lookupCabMakeup(lastSize, lastBack));
-        if (n > 1)
-            cabMakeupSmooth.skip(n - 1);
-        cabMakeup = cabMakeupSmooth.getNextValue();
-        applyGain(work, n, cabMakeup);
-
-        const bool needHrtf = binauralMix.getCurrentValue() > 0.001f
-                           || binauralMix.getTargetValue() > 0.001f;
-
-        if (! needHrtf)
+        int done = 0;
+        while (done < total)
         {
-            copyMonoToStereo(work, n, stereoOut);
-            binauralMix.skip(n);
-            return;
-        }
-
-        hrtfL.copyFrom(0, 0, work, 0, 0, n);
-        hrtfR.copyFrom(0, 0, work, 0, 0, n);
-        processReplacing(earL, hrtfL, n);
-        processReplacing(earR, hrtfR, n);
-
-        auto* mono = work.getReadPointer(0);
-        auto* left = hrtfL.getReadPointer(0);
-        auto* right = hrtfR.getReadPointer(0);
-        auto* outL = stereoOut.getWritePointer(0);
-        auto* outR = stereoOut.getNumChannels() > 1 ? stereoOut.getWritePointer(1) : nullptr;
-
-        for (int i = 0; i < n; ++i)
-        {
-            const float mix = binauralMix.getNextValue();
-            const float dryAmt = 1.0f - mix;
-            const float l = guard(mono[i] * dryAmt + left[i] * mix * hrtfMakeup);
-            const float r = guard(mono[i] * dryAmt + right[i] * mix * hrtfMakeup);
-            outL[i] = l;
-            if (outR != nullptr)
-                outR[i] = r;
+            const int n = juce::jmin(maxBlock, total - done);
+            processSlice(monoIn, stereoOut, done, n);
+            done += n;
         }
     }
 
@@ -240,18 +219,66 @@ private:
         buffer.applyGain(0, 0, juce::jmin(n, buffer.getNumSamples()), gain);
     }
 
-    void copyMonoToStereo(const juce::AudioBuffer<float>& mono, int n, juce::AudioBuffer<float>& stereo)
+    void processSlice(const juce::AudioBuffer<float>& monoIn, juce::AudioBuffer<float>& stereoOut,
+                      int offset, int n)
     {
-        const int count = juce::jmin(n, mono.getNumSamples());
+        work.copyFrom(0, 0, monoIn, 0, offset, n);
+        processCab(work, n);
+        cabMakeupSmooth.setTargetValue(lookupCabMakeup(lastSize, lastBack));
+        if (n > 1)
+            cabMakeupSmooth.skip(n - 1);
+        cabMakeup = cabMakeupSmooth.getNextValue();
+        applyGain(work, n, cabMakeup);
+
+        const bool needHrtf = binauralMix.getCurrentValue() > 0.001f
+                           || binauralMix.getTargetValue() > 0.001f;
+
+        if (! needHrtf)
+        {
+            copyMonoToStereo(work, n, stereoOut, offset);
+            binauralMix.skip(n);
+            return;
+        }
+
+        hrtfL.copyFrom(0, 0, work, 0, 0, n);
+        hrtfR.copyFrom(0, 0, work, 0, 0, n);
+        processReplacing(earL, hrtfL, n);
+        processReplacing(earR, hrtfR, n);
+
+        auto* mono = work.getReadPointer(0);
+        auto* left = hrtfL.getReadPointer(0);
+        auto* right = hrtfR.getReadPointer(0);
+        auto* outL = stereoOut.getWritePointer(0);
+        auto* outR = stereoOut.getNumChannels() > 1 ? stereoOut.getWritePointer(1) : nullptr;
+
+        for (int i = 0; i < n; ++i)
+        {
+            const float mix = binauralMix.getNextValue();
+            const float dryAmt = 1.0f - mix;
+            const float l = guard(mono[i] * dryAmt + left[i] * mix * hrtfMakeup);
+            const float r = guard(mono[i] * dryAmt + right[i] * mix * hrtfMakeup);
+            outL[offset + i] = l;
+            if (outR != nullptr)
+                outR[offset + i] = r;
+        }
+    }
+
+    void copyMonoToStereo(const juce::AudioBuffer<float>& mono, int n,
+                          juce::AudioBuffer<float>& stereo, int destOffset)
+    {
+        const int count = juce::jmin(n, mono.getNumSamples(),
+                                     stereo.getNumSamples() - destOffset);
+        if (count <= 0)
+            return;
         auto* src = mono.getReadPointer(0);
         auto* outL = stereo.getWritePointer(0);
         auto* outR = stereo.getNumChannels() > 1 ? stereo.getWritePointer(1) : nullptr;
         for (int i = 0; i < count; ++i)
         {
             const float s = guard(src[i]);
-            outL[i] = s;
+            outL[destOffset + i] = s;
             if (outR != nullptr)
-                outR[i] = s;
+                outR[destOffset + i] = s;
         }
     }
 
@@ -496,6 +523,7 @@ private:
 
     double sampleRate = 48000.0;
     int maxBlock = 512;
+    bool irsLoaded = false;
     float lastSize = defaultSize;
     float lastBack = defaultBack;
     float cabMakeup = 1.0f;

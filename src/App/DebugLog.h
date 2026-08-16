@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <memory>
 
 class DebugLog
@@ -14,6 +15,9 @@ public:
     static constexpr const char* stageName[numStages] = {
         "in", "pre", "star", "post", "cab", "out"
     };
+    static constexpr int maskNan = 0x100;
+    static constexpr int maskXrun = 0x200;
+    static constexpr int maskNOver = 0x400;
 
     struct Snapshot
     {
@@ -37,7 +41,13 @@ public:
     {
         double sampleRate = 48000.0;
         int blockSize = 128;
+        int preparedMax = 2048;
+        juce::String deviceType;
         juce::String device;
+        int activeIns = 0;
+        int activeOuts = 0;
+        int selectedInput = 1;
+        juce::String cpu;
         juce::String slug;
         Snapshot patch;
     };
@@ -55,6 +65,7 @@ public:
     }
 
     bool isActive() const { return active.load(std::memory_order_relaxed); }
+    int sessionXruns() const { return sessionXrunCount.load(std::memory_order_relaxed); }
 
     void start(const Header& header)
     {
@@ -86,17 +97,28 @@ public:
         eventWrite.store(0, std::memory_order_relaxed);
         eventRead.store(0, std::memory_order_relaxed);
         droppedEvents.store(0, std::memory_order_relaxed);
+        sessionXrunCount.store(0, std::memory_order_relaxed);
+        sessionNOverCount.store(0, std::memory_order_relaxed);
+        sessionCbUsMax.store(0, std::memory_order_relaxed);
+        sessionNMax.store(0, std::memory_order_relaxed);
 
         juce::String text;
         text << "# ToneStar debug\n";
         text << "started " << juce::Time::getCurrentTime().toISO8601(true) << "\n";
         text << "sr=" << juce::String(header.sampleRate, 1)
-             << " block=" << header.blockSize << "\n";
+             << " block=" << header.blockSize
+             << " maxBlock=" << header.preparedMax << "\n";
+        text << "deviceType " << (header.deviceType.isNotEmpty() ? header.deviceType : juce::String("-")) << "\n";
         text << "device " << (header.device.isNotEmpty() ? header.device : juce::String("-")) << "\n";
+        text << "io in=" << header.activeIns
+             << " out=" << header.activeOuts
+             << " selected=" << header.selectedInput << "\n";
+        text << "cpu " << (header.cpu.isNotEmpty() ? header.cpu : juce::String("-")) << "\n";
         text << "slug " << header.slug << "\n";
         appendPatch(text, header.patch);
         text << "\n# windows every ~200 ms, peaks and RMS in dBFS\n";
-        text << "t_ms  in  inRms  pre  preRms  star  starRms  post  postRms  cab  cabRms  out  outRms\n";
+        text << "t_ms  n_min  n_max  cb_us_avg  cb_us_max  budget_us  xruns  n_over"
+             << "  in  inRms  pre  preRms  star  starRms  post  postRms  cab  cabRms  out  outRms\n";
         stream->writeText(text, false, false, nullptr);
         stream->flush();
 
@@ -104,7 +126,7 @@ public:
     }
 
     void noteBlock(const float peaks[numStages], const float rms[numStages], int numSamples,
-                   const Snapshot& patch)
+                   int cbUs, int preparedMax, double sampleRate, const Snapshot& patch)
     {
         if (! active.load(std::memory_order_acquire) || numSamples <= 0)
             return;
@@ -115,7 +137,7 @@ public:
             const float p = peaks[i];
             const float r = rms[i];
             if (! std::isfinite(p) || ! std::isfinite(r))
-                mask |= (1 << i) | 0x100;
+                mask |= (1 << i) | maskNan;
             else
             {
                 if (p >= 0.9f)
@@ -129,7 +151,33 @@ public:
             updateMax(sessionPeak[(size_t) i], p);
         }
 
+        const int budgetUs = sampleRate > 0.0
+                                 ? juce::jmax(1, (int) std::lround(1.0e6 * (double) numSamples / sampleRate))
+                                 : 1;
+        const bool xrun = cbUs > budgetUs;
+        const bool nOver = numSamples > preparedMax;
+        if (xrun)
+        {
+            mask |= maskXrun;
+            windowXruns.fetch_add(1, std::memory_order_relaxed);
+            sessionXrunCount.fetch_add(1, std::memory_order_relaxed);
+        }
+        if (nOver)
+        {
+            mask |= maskNOver;
+            windowNOver.fetch_add(1, std::memory_order_relaxed);
+            sessionNOverCount.fetch_add(1, std::memory_order_relaxed);
+        }
+
         windowSamples.fetch_add(numSamples, std::memory_order_relaxed);
+        windowBlocks.fetch_add(1, std::memory_order_relaxed);
+        windowCbUsSum.fetch_add(cbUs, std::memory_order_relaxed);
+        lastSampleRate.store(sampleRate, std::memory_order_relaxed);
+        updateMaxInt(windowCbUsMax, cbUs);
+        updateMaxInt(sessionCbUsMax, cbUs);
+        updateMinInt(windowNMin, numSamples);
+        updateMaxInt(windowNMax, numSamples);
+        updateMaxInt(sessionNMax, numSamples);
 
         if (mask != 0)
         {
@@ -140,7 +188,7 @@ public:
                 if ((mask & (1 << (i + 8))) != 0)
                     clipCount[(size_t) i].fetch_add(1, std::memory_order_relaxed);
             }
-            pushEvent(peaks, patch, mask);
+            pushEvent(peaks, patch, mask, cbUs, numSamples, budgetUs, preparedMax);
         }
     }
 
@@ -158,6 +206,7 @@ public:
             return;
 
         const int n = windowSamples.exchange(0, std::memory_order_relaxed);
+        const int blocks = windowBlocks.exchange(0, std::memory_order_relaxed);
         lastFlushMs = now;
         if (n <= 0)
             return;
@@ -171,8 +220,29 @@ public:
             rms[i] = (float) std::sqrt(juce::jmax(0.0, energy) / (double) n);
         }
 
+        const int nMinRaw = windowNMin.exchange(std::numeric_limits<int>::max(), std::memory_order_relaxed);
+        const int nMax = windowNMax.exchange(0, std::memory_order_relaxed);
+        const int cbSum = windowCbUsSum.exchange(0, std::memory_order_relaxed);
+        const int cbMax = windowCbUsMax.exchange(0, std::memory_order_relaxed);
+        const int xruns = windowXruns.exchange(0, std::memory_order_relaxed);
+        const int nOver = windowNOver.exchange(0, std::memory_order_relaxed);
+        const int cbAvg = blocks > 0 ? cbSum / blocks : 0;
+        const int nMin = nMinRaw == std::numeric_limits<int>::max() ? 0 : nMinRaw;
+        const int typicalN = nMax > 0 ? nMax : nMin;
+        const double sr = lastSampleRate.load(std::memory_order_relaxed);
+        const int budgetUs = typicalN > 0 && sr > 0.0
+                                 ? juce::jmax(1, (int) std::lround(1.0e6 * (double) typicalN / sr))
+                                 : 0;
+
         juce::String line;
-        line << (int) (now - startMs);
+        line << (int) (now - startMs)
+             << "  " << nMin
+             << "  " << nMax
+             << "  " << cbAvg
+             << "  " << cbMax
+             << "  " << budgetUs
+             << "  " << xruns
+             << "  " << nOver;
         for (int i = 0; i < numStages; ++i)
             line << "  " << fmtDb(peaks[i]) << "  " << fmtDb(rms[i]);
         line << "\n";
@@ -192,6 +262,10 @@ public:
             juce::String text;
             text << "\n# summary\n";
             text << "duration_ms=" << (int) (juce::Time::currentTimeMillis() - startMs) << "\n";
+            text << "xruns=" << sessionXrunCount.load(std::memory_order_relaxed)
+                 << " n_over=" << sessionNOverCount.load(std::memory_order_relaxed)
+                 << " cb_us_max=" << sessionCbUsMax.load(std::memory_order_relaxed)
+                 << " n_max=" << sessionNMax.load(std::memory_order_relaxed) << "\n";
             for (int i = 0; i < numStages; ++i)
             {
                 text << stageName[i]
@@ -219,6 +293,10 @@ private:
         Snapshot patch;
         int mask = 0;
         int tMs = 0;
+        int cbUs = 0;
+        int n = 0;
+        int budgetUs = 0;
+        int preparedMax = 0;
         std::atomic<bool> ready { false };
     };
 
@@ -226,6 +304,24 @@ private:
     {
         float current = slot.load(std::memory_order_relaxed);
         while (value > current
+               && ! slot.compare_exchange_weak(current, value, std::memory_order_relaxed))
+        {
+        }
+    }
+
+    static void updateMaxInt(std::atomic<int>& slot, int value)
+    {
+        int current = slot.load(std::memory_order_relaxed);
+        while (value > current
+               && ! slot.compare_exchange_weak(current, value, std::memory_order_relaxed))
+        {
+        }
+    }
+
+    static void updateMinInt(std::atomic<int>& slot, int value)
+    {
+        int current = slot.load(std::memory_order_relaxed);
+        while (value < current
                && ! slot.compare_exchange_weak(current, value, std::memory_order_relaxed))
         {
         }
@@ -257,7 +353,7 @@ private:
             text << " " << axes[i] << "=" << juce::String(patch.axes[(size_t) i], 3);
         text << "\nfx";
         static constexpr const char* jobs[] = {
-            "Squeeze", "Talk", "Shift", "Echo", "Bloom", "Width", "Sweep", "Pulse"
+            "Squeeze", "Talk", "Shift", "Echo", "Bloom", "Thicken", "Sweep", "Pulse"
         };
         for (int i = 0; i < 8; ++i)
             text << " " << jobs[i] << "=" << juce::String(patch.fx[(size_t) i], 3);
@@ -280,9 +376,17 @@ private:
             windowEnergy[(size_t) i].store(0.0, std::memory_order_relaxed);
         }
         windowSamples.store(0, std::memory_order_relaxed);
+        windowBlocks.store(0, std::memory_order_relaxed);
+        windowCbUsSum.store(0, std::memory_order_relaxed);
+        windowCbUsMax.store(0, std::memory_order_relaxed);
+        windowNMin.store(std::numeric_limits<int>::max(), std::memory_order_relaxed);
+        windowNMax.store(0, std::memory_order_relaxed);
+        windowXruns.store(0, std::memory_order_relaxed);
+        windowNOver.store(0, std::memory_order_relaxed);
     }
 
-    void pushEvent(const float peaks[numStages], const Snapshot& patch, int mask)
+    void pushEvent(const float peaks[numStages], const Snapshot& patch, int mask,
+                   int cbUs, int n, int budgetUs, int preparedMax)
     {
         const uint32_t write = eventWrite.load(std::memory_order_relaxed);
         const uint32_t read = eventRead.load(std::memory_order_acquire);
@@ -304,6 +408,10 @@ private:
         slot.patch = patch;
         slot.mask = mask;
         slot.tMs = (int) (juce::Time::currentTimeMillis() - startMs);
+        slot.cbUs = cbUs;
+        slot.n = n;
+        slot.budgetUs = budgetUs;
+        slot.preparedMax = preparedMax;
         slot.ready.store(true, std::memory_order_release);
         eventWrite.store(write + 1, std::memory_order_release);
     }
@@ -325,7 +433,12 @@ private:
                 break;
 
             juce::String line;
-            line << "EVENT t_ms=" << slot.tMs << " stages=";
+            line << "EVENT t_ms=" << slot.tMs;
+            if ((slot.mask & maskXrun) != 0)
+                line << " xrun cb_us=" << slot.cbUs << " budget_us=" << slot.budgetUs;
+            if ((slot.mask & maskNOver) != 0)
+                line << " n_over n=" << slot.n << " prepared=" << slot.preparedMax;
+            line << " stages=";
             bool first = true;
             for (int i = 0; i < numStages; ++i)
             {
@@ -338,8 +451,10 @@ private:
                 if ((slot.mask & (1 << (i + 8))) != 0)
                     line << "*";
             }
-            if ((slot.mask & 0x100) != 0)
+            if ((slot.mask & maskNan) != 0)
                 line << (first ? "nan" : ",nan");
+            if (first && (slot.mask & maskNan) == 0)
+                line << "-";
             line << " peaks";
             for (int i = 0; i < numStages; ++i)
                 line << " " << stageName[i] << "=" << fmtDb(slot.peaks[i]);
@@ -356,9 +471,21 @@ private:
     std::array<std::atomic<float>, numStages> windowPeak {};
     std::array<std::atomic<double>, numStages> windowEnergy {};
     std::atomic<int> windowSamples { 0 };
+    std::atomic<int> windowBlocks { 0 };
+    std::atomic<int> windowCbUsSum { 0 };
+    std::atomic<int> windowCbUsMax { 0 };
+    std::atomic<int> windowNMin { std::numeric_limits<int>::max() };
+    std::atomic<int> windowNMax { 0 };
+    std::atomic<int> windowXruns { 0 };
+    std::atomic<int> windowNOver { 0 };
+    std::atomic<double> lastSampleRate { 48000.0 };
     std::array<std::atomic<float>, numStages> sessionPeak {};
     std::array<std::atomic<int>, numStages> hotCount {};
     std::array<std::atomic<int>, numStages> clipCount {};
+    std::atomic<int> sessionXrunCount { 0 };
+    std::atomic<int> sessionNOverCount { 0 };
+    std::atomic<int> sessionCbUsMax { 0 };
+    std::atomic<int> sessionNMax { 0 };
 
     static constexpr int eventCap = 64;
     Event events[eventCap];
