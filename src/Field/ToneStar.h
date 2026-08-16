@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Appearance/CuteLookAndFeel.h"
+#include "Appearance/Theme.h"
 #include "Visuals/FieldEnergy.h"
 #include "Visuals/PlasmaLook.h"
 #include "Visuals/StarPlasma.h"

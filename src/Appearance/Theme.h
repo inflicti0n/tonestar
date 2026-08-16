@@ -1,9 +1,9 @@
-﻿#pragma once
+#pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <cmath>
 
-class CuteLookAndFeel : public juce::LookAndFeel_V4
+class Theme : public juce::LookAndFeel_V4
 {
 public:
     static juce::Colour voidFill() { return juce::Colour(0xff0b0e14); }
@@ -27,7 +27,7 @@ public:
     static juce::Colour meterTrack() { return juce::Colour(0xffffe0d4); }
     static float corner() { return 8.0f; }
 
-    CuteLookAndFeel();
+    Theme();
 
     juce::Font font(float height, bool bold = false) const;
     juce::Font titleFont(float height) const;

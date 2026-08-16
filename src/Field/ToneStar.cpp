@@ -266,7 +266,7 @@ void ToneStar::paint(juce::Graphics& g)
         values[(size_t) i] = spokePoint(i, display[(size_t) i]);
     }
 
-    g.setColour(CuteLookAndFeel::meterTrack().withAlpha(0.85f));
+    g.setColour(Theme::meterTrack().withAlpha(0.85f));
     for (float value : { 0.0f, 0.5f, 1.0f })
     {
         std::array<juce::Point<float>, maxAxes> pts {};
@@ -275,12 +275,12 @@ void ToneStar::paint(juce::Graphics& g)
         g.strokePath(axisPath(pts, 5.0f), juce::PathStrokeType(1.1f));
     }
 
-    g.setColour(CuteLookAndFeel::peach().withAlpha(0.45f));
+    g.setColour(Theme::peach().withAlpha(0.45f));
     for (int i = 0; i < axisCount; ++i)
         g.drawLine({ spokePoint(i, 0.0f), outer[(size_t) i] }, 1.0f);
 
     const auto starPath = axisPath(values, 7.0f);
-    g.setColour(CuteLookAndFeel::peach().withAlpha(0.35f));
+    g.setColour(Theme::peach().withAlpha(0.35f));
     g.fillPath(starPath);
 
     const auto plasmaFrame = plasma.copyFrame();
@@ -295,7 +295,7 @@ void ToneStar::paint(juce::Graphics& g)
         g.restoreState();
     }
 
-    g.setColour(CuteLookAndFeel::rose());
+    g.setColour(Theme::rose());
     g.strokePath(starPath, juce::PathStrokeType(2.0f, juce::PathStrokeType::mitered,
                                                 juce::PathStrokeType::butt));
 
@@ -304,12 +304,12 @@ void ToneStar::paint(juce::Graphics& g)
         const bool active = (i == dragAxis || i == hoverAxis);
         const auto p = values[(size_t) i];
         const float r = active ? 7.0f : 5.5f;
-        g.setColour(CuteLookAndFeel::card());
+        g.setColour(Theme::card());
         g.fillEllipse(p.x - r, p.y - r, r * 2.0f, r * 2.0f);
-        g.setColour(CuteLookAndFeel::rose());
+        g.setColour(Theme::rose());
         g.drawEllipse(p.x - r, p.y - r, r * 2.0f, r * 2.0f, active ? 2.2f : 1.6f);
 
-        g.setColour(active ? CuteLookAndFeel::rose() : CuteLookAndFeel::ink());
+        g.setColour(active ? Theme::rose() : Theme::ink());
         g.setFont(juce::FontOptions(15.0f, juce::Font::bold));
         if (axisCount == 6)
         {

@@ -1,40 +1,11 @@
 #pragma once
 
 #include "App/RigMode.h"
-#include "Appearance/CuteLookAndFeel.h"
+#include "Appearance/WindowShell.h"
 
 #include <juce_events/juce_events.h>
 #include <cmath>
 #include <functional>
-
-class CircleButton : public juce::Button
-{
-public:
-    CircleButton(juce::Colour fillColour, juce::Colour glyphColour, juce::String glyph)
-        : juce::Button({}), fill(fillColour), glyph(glyphColour), symbol(std::move(glyph))
-    {
-        setMouseCursor(juce::MouseCursor::PointingHandCursor);
-        setWantsKeyboardFocus(false);
-    }
-
-    void paintButton(juce::Graphics& g, bool highlighted, bool down) override
-    {
-        auto bounds = getLocalBounds().toFloat();
-        const float d = juce::jmin(bounds.getWidth(), bounds.getHeight()) - (down ? 2.0f : 0.0f);
-        const auto disc = bounds.withSizeKeepingCentre(d, d);
-        g.setColour(highlighted ? fill.brighter(0.08f) : fill);
-        g.fillEllipse(disc);
-        g.setColour(glyph);
-        if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
-            g.setFont(laf->font(16.0f, true));
-        g.drawText(symbol, disc, juce::Justification::centred, false);
-    }
-
-private:
-    juce::Colour fill;
-    juce::Colour glyph;
-    juce::String symbol;
-};
 
 enum class CircleIcon { Mute, Binaural, Debug, Presets, Advanced, Record, Folder, Export, Metro, Tune, Looper, Loop, Quantize, Play, Pause, Stop };
 
@@ -42,7 +13,7 @@ class CircleToggle : public juce::Button
 {
 public:
     CircleToggle(juce::String title, juce::Colour onColour, CircleIcon iconToUse,
-                 juce::Colour offColour = CuteLookAndFeel::panel())
+                 juce::Colour offColour = Theme::panel())
         : juce::Button({}), onFill(onColour), offFill(offColour), icon(iconToUse)
     {
         setClickingTogglesState(true);
@@ -67,13 +38,13 @@ public:
         {
             if (! on)
             {
-                g.setColour(CuteLookAndFeel::flare().interpolatedWith(CuteLookAndFeel::panel(), 0.45f));
+                g.setColour(Theme::flare().interpolatedWith(Theme::panel(), 0.45f));
                 g.fillEllipse(disc.reduced(d * 0.32f));
             }
             return;
         }
 
-        const auto glyph = on ? CuteLookAndFeel::onAccent() : CuteLookAndFeel::dim();
+        const auto glyph = on ? Theme::onAccent() : Theme::dim();
         drawIcon(g, disc.reduced(d * 0.26f), glyph);
     }
 
@@ -209,7 +180,7 @@ private:
         }
         else if (icon == CircleIcon::Quantize)
         {
-            if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+            if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
                 g.setFont(laf->font(r.getHeight() * 0.92f, true));
             else
                 g.setFont(juce::FontOptions(r.getHeight() * 0.92f, juce::Font::bold));
@@ -253,13 +224,13 @@ private:
 class TitleBar : public juce::Component
 {
 public:
-    static constexpr float pad = 12.0f;
-    static constexpr float button = 28.0f;
-    static constexpr int barHeight = 52;
+    static constexpr float pad = WindowShell::pad;
+    static constexpr float button = WindowShell::button;
+    static constexpr int barHeight = WindowShell::barHeight;
 
-    CircleToggle presetsButton { "Presets", CuteLookAndFeel::nova(), CircleIcon::Presets };
-    CircleToggle advancedButton { "Advanced", CuteLookAndFeel::nova(), CircleIcon::Advanced };
-    CircleToggle looperButton { "Looper", CuteLookAndFeel::nova(), CircleIcon::Looper };
+    CircleToggle presetsButton { "Presets", Theme::nova(), CircleIcon::Presets };
+    CircleToggle advancedButton { "Advanced", Theme::nova(), CircleIcon::Advanced };
+    CircleToggle looperButton { "Looper", Theme::nova(), CircleIcon::Looper };
     std::function<void()> onModeChange;
 
     RigMode getMode() const { return mode; }
@@ -274,114 +245,84 @@ public:
     }
 
     TitleBar()
-        : minimiseButton(CuteLookAndFeel::panel(), CuteLookAndFeel::mist(), "-"),
-          closeButton(CuteLookAndFeel::flare(), CuteLookAndFeel::onAccent(), "X"),
+        : shellBar({}),
+          minimiseButton(Theme::panel(), Theme::mist(), "-"),
+          guitarWord("GUITAR", RigMode::Guitar, *this),
+          vocalsWord("VOCALS", RigMode::Vocals, *this),
           vblank(this, [this] { repaint(); })
     {
         setInterceptsMouseClicks(true, true);
+        shellBar.onClose = []
+        {
+            juce::JUCEApplication::getInstance()->systemRequestedQuit();
+        };
         minimiseButton.onClick = [this]
         {
             if (auto* top = getTopLevelComponent())
                 if (auto* peer = top->getPeer())
                     peer->setMinimised(true);
         };
-        closeButton.onClick = []
-        {
-            juce::JUCEApplication::getInstance()->systemRequestedQuit();
-        };
+        addAndMakeVisible(shellBar);
         addAndMakeVisible(presetsButton);
         addAndMakeVisible(advancedButton);
         addAndMakeVisible(looperButton);
+        addAndMakeVisible(guitarWord);
+        addAndMakeVisible(pipe);
+        addAndMakeVisible(vocalsWord);
         addAndMakeVisible(minimiseButton);
-        addAndMakeVisible(closeButton);
     }
 
     void resized() override
     {
+        shellBar.setBounds(getLocalBounds());
         const int d = (int) button;
         const int p = (int) pad;
         presetsButton.setBounds(p, p, d, d);
         advancedButton.setBounds(p + d + 8, p, d, d);
         looperButton.setBounds(p + (d + 8) * 2, p, d, d);
-        closeButton.setBounds(getWidth() - p - d, p, d, d);
         minimiseButton.setBounds(getWidth() - p - d - 8 - d, p, d, d);
+        layoutModeWords();
     }
 
-    void mouseDown(const juce::MouseEvent& e) override
+    void lookAndFeelChanged() override
     {
-        if (e.eventComponent != this)
-            return;
-        if (hitGuitar.contains(e.position))
-        {
-            setMode(RigMode::Guitar, true);
-            return;
-        }
-        if (hitVocals.contains(e.position))
-        {
-            setMode(RigMode::Vocals, true);
-            return;
-        }
-        if (auto* top = getTopLevelComponent())
-            dragger.startDraggingComponent(top, e);
-    }
-
-    void mouseDrag(const juce::MouseEvent& e) override
-    {
-        if (e.eventComponent != this)
-            return;
-        if (auto* top = getTopLevelComponent())
-            dragger.dragComponent(top, e, nullptr);
+        layoutModeWords();
     }
 
     void paint(juce::Graphics& g) override
     {
         const float t = (float) juce::Time::getMillisecondCounterHiRes() * 0.001f;
-        const float buttonsRight = pad + button * 3.0f + 8.0f * 2.0f;
         const float rightSide = pad + button * 2.0f + 8.0f + 8.0f;
         auto bar = getLocalBounds().toFloat();
 
         juce::Font titleFont = juce::FontOptions(22.0f, juce::Font::bold);
         juce::Font modeFont = juce::FontOptions(16.0f, juce::Font::bold);
-        if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+        if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
         {
             titleFont = laf->titleFont(22.0f);
             modeFont = laf->titleFont(16.0f);
         }
 
-        auto textWidth = [] (const juce::Font& font, const juce::String& text)
+        g.setFont(modeFont);
+        auto drawMode = [&] (const juce::Rectangle<float>& r, const juce::String& text, bool on)
         {
-            juce::GlyphArrangement ga;
-            ga.addLineOfText(font, text, 0.0f, 0.0f);
-            return ga.getBoundingBox(0, ga.getNumGlyphs(), true).getWidth();
+            g.setColour(on ? Theme::starlight() : Theme::dim());
+            g.drawText(text, r, juce::Justification::centred, false);
         };
-        const float guitarW = textWidth(modeFont, "GUITAR");
-        const float midW = textWidth(modeFont, " | ");
-        const float vocalsW = textWidth(modeFont, "VOCALS");
-        const float x0 = buttonsRight + 12.0f;
-        hitGuitar = { x0, bar.getY(), guitarW, bar.getHeight() };
-        hitVocals = { x0 + guitarW + midW, bar.getY(), vocalsW, bar.getHeight() };
-        const auto mid = juce::Rectangle<float>(x0 + guitarW, bar.getY(), midW, bar.getHeight());
+        drawMode(guitarWord.getBounds().toFloat(), "GUITAR", mode == RigMode::Guitar);
+        g.setColour(Theme::dim());
+        g.drawText("|", pipe.getBounds().toFloat(), juce::Justification::centred, false);
+        drawMode(vocalsWord.getBounds().toFloat(), "VOCALS", mode == RigMode::Vocals);
 
-        auto titleArea = bar.withTrimmedLeft(hitVocals.getRight() + 8.0f)
+        auto titleArea = bar.withTrimmedLeft((float) vocalsWord.getRight() + 8.0f)
                              .withTrimmedRight(rightSide);
         const float cx = titleArea.getCentreX();
         const float cy = titleArea.getCentreY();
         const float shift = std::sin(t * 1.35f) * 56.0f;
-        juce::ColourGradient grad(CuteLookAndFeel::starlight(), cx - 90.0f + shift, cy,
-                                  CuteLookAndFeel::nova(), cx + 90.0f + shift, cy, false);
+        juce::ColourGradient grad(Theme::starlight(), cx - 90.0f + shift, cy,
+                                  Theme::nova(), cx + 90.0f + shift, cy, false);
         grad.addColour(0.42, juce::Colour(0xfffff4d4));
-        grad.addColour(0.68, CuteLookAndFeel::nova().brighter(0.15f));
-
-        g.setFont(modeFont);
-        auto drawMode = [&] (const juce::Rectangle<float>& r, const juce::String& text, bool on)
-        {
-            g.setColour(on ? CuteLookAndFeel::starlight() : CuteLookAndFeel::dim());
-            g.drawText(text, r, juce::Justification::centred, false);
-        };
-        drawMode(hitGuitar, "GUITAR", mode == RigMode::Guitar);
-        g.setColour(CuteLookAndFeel::dim());
-        g.drawText("|", mid, juce::Justification::centred, false);
-        drawMode(hitVocals, "VOCALS", mode == RigMode::Vocals);
+        grad.addColour(0.68, Theme::nova().brighter(0.15f));
 
         g.setFont(titleFont);
         g.setGradientFill(grad);
@@ -395,19 +336,70 @@ public:
             const float px = titleArea.getX() + 8.0f + rng.nextFloat() * (titleArea.getWidth() - 16.0f);
             const float py = titleArea.getY() + 8.0f + rng.nextFloat() * (titleArea.getHeight() - 16.0f);
             const float twinkle = 0.15f + 0.75f * (0.5f + 0.5f * std::sin(t * (3.2f + (float) i * 0.47f) + (float) i));
-            g.setColour(CuteLookAndFeel::starlight().withAlpha(twinkle));
+            g.setColour(Theme::starlight().withAlpha(twinkle));
             const float s = 1.2f + rng.nextFloat() * 1.6f;
             g.fillEllipse(px, py, s, s);
         }
     }
 
 private:
-    juce::ComponentDragger dragger;
+    class ModeWord : public juce::Component
+    {
+    public:
+        ModeWord(juce::String textToUse, RigMode modeToUse, TitleBar& ownerToUse)
+            : text(std::move(textToUse)), wordMode(modeToUse), owner(ownerToUse)
+        {
+            setMouseCursor(juce::MouseCursor::PointingHandCursor);
+        }
+
+        void mouseDown(const juce::MouseEvent&) override
+        {
+            owner.setMode(wordMode, true);
+        }
+
+        void paint(juce::Graphics&) override {}
+
+    private:
+        juce::String text;
+        RigMode wordMode;
+        TitleBar& owner;
+    };
+
+    class Pipe : public juce::Component
+    {
+    public:
+        void paint(juce::Graphics&) override {}
+    };
+
+    void layoutModeWords()
+    {
+        juce::Font modeFont = juce::FontOptions(16.0f, juce::Font::bold);
+        if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
+            modeFont = laf->titleFont(16.0f);
+
+        auto textWidth = [] (const juce::Font& font, const juce::String& text)
+        {
+            juce::GlyphArrangement ga;
+            ga.addLineOfText(font, text, 0.0f, 0.0f);
+            return ga.getBoundingBox(0, ga.getNumGlyphs(), true).getWidth();
+        };
+
+        const int guitarW = juce::roundToInt(textWidth(modeFont, "GUITAR")) + 8;
+        const int midW = juce::roundToInt(textWidth(modeFont, " | ")) + 4;
+        const int vocalsW = juce::roundToInt(textWidth(modeFont, "VOCALS")) + 8;
+        const int x0 = (int) (pad + button * 3.0f + 8.0f * 2.0f + 12.0f);
+        guitarWord.setBounds(x0, 0, guitarW, getHeight());
+        pipe.setBounds(x0 + guitarW, 0, midW, getHeight());
+        vocalsWord.setBounds(x0 + guitarW + midW, 0, vocalsW, getHeight());
+    }
+
+    WindowShell::Bar shellBar;
     CircleButton minimiseButton;
-    CircleButton closeButton;
+    ModeWord guitarWord;
+    Pipe pipe;
+    ModeWord vocalsWord;
     juce::VBlankAttachment vblank;
     RigMode mode = RigMode::Guitar;
-    juce::Rectangle<float> hitGuitar, hitVocals;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(TitleBar)
 };

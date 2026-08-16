@@ -141,24 +141,24 @@ void CabWidget::drawSpeaker(juce::Graphics& g, juce::Point<float> c, float radiu
 
     if (openness > 0.08f)
     {
-        g.setColour(CuteLookAndFeel::nova().interpolatedWith(CuteLookAndFeel::starlight(), 0.35f)
+        g.setColour(Theme::nova().interpolatedWith(Theme::starlight(), 0.35f)
                         .withAlpha(0.22f + 0.45f * openness));
         g.fillEllipse(disc.expanded(2.0f));
-        g.setColour(CuteLookAndFeel::voidFill().interpolatedWith(CuteLookAndFeel::panel(), 0.25f));
+        g.setColour(Theme::voidFill().interpolatedWith(Theme::panel(), 0.25f));
         g.fillEllipse(disc);
         const float hole = r * juce::jmap(openness, 0.42f, 0.62f);
-        g.setColour(CuteLookAndFeel::nova().withAlpha(0.55f * openness));
+        g.setColour(Theme::nova().withAlpha(0.55f * openness));
         g.fillEllipse(c.x - hole, c.y - hole, hole * 2.0f, hole * 2.0f);
-        g.setColour(CuteLookAndFeel::starlight().withAlpha(0.35f * openness));
+        g.setColour(Theme::starlight().withAlpha(0.35f * openness));
         g.fillEllipse(c.x - hole * 0.45f, c.y - hole * 0.45f, hole * 0.9f, hole * 0.9f);
         return;
     }
 
-    g.setColour(CuteLookAndFeel::voidFill());
+    g.setColour(Theme::voidFill());
     g.fillEllipse(disc);
-    g.setColour(CuteLookAndFeel::panel().brighter(0.08f));
+    g.setColour(Theme::panel().brighter(0.08f));
     g.fillEllipse(disc.reduced(r * 0.22f));
-    g.setColour(CuteLookAndFeel::dim().withAlpha(0.55f));
+    g.setColour(Theme::dim().withAlpha(0.55f));
     g.fillEllipse(c.x - r * 0.22f, c.y - r * 0.22f, r * 0.44f, r * 0.44f);
 }
 
@@ -172,19 +172,19 @@ void CabWidget::drawCabinet(juce::Graphics& g, juce::Rectangle<float> body, int 
     {
         const float peek = juce::jmap(openness, 8.0f, 14.0f);
         auto rear = body.translated(peek, peek * 0.45f);
-        fillRound(g, rear, rad, CuteLookAndFeel::starlight().withAlpha(0.18f + 0.28f * openness));
+        fillRound(g, rear, rad, Theme::starlight().withAlpha(0.18f + 0.28f * openness));
         fillRound(g, rear.reduced(5.0f, 6.0f), rad - 2.0f,
-                  CuteLookAndFeel::nova().withAlpha(0.16f + 0.32f * openness));
+                  Theme::nova().withAlpha(0.16f + 0.32f * openness));
     }
 
-    fillRound(g, body, rad, CuteLookAndFeel::panel().brighter(hover));
+    fillRound(g, body, rad, Theme::panel().brighter(hover));
 
     auto baffle = body;
     if (withPanel)
     {
         const float panelH = juce::jmax(14.0f, body.getHeight() * 0.18f);
         auto panel = body.removeFromTop(panelH);
-        fillRound(g, panel, rad, CuteLookAndFeel::voidFill().interpolatedWith(CuteLookAndFeel::panel(), 0.35f));
+        fillRound(g, panel, rad, Theme::voidFill().interpolatedWith(Theme::panel(), 0.35f));
         const int knobs = speakers <= 1 ? 3 : 5;
         const float ky = panel.getCentreY();
         const float kr = juce::jmin(3.2f, panel.getHeight() * 0.16f);
@@ -193,7 +193,7 @@ void CabWidget::drawCabinet(juce::Graphics& g, juce::Rectangle<float> body, int 
         for (int i = 0; i < knobs; ++i)
         {
             const float t = knobs == 1 ? 0.5f : (float) i / (float) (knobs - 1);
-            g.setColour(CuteLookAndFeel::dim().interpolatedWith(CuteLookAndFeel::nova(), hover));
+            g.setColour(Theme::dim().interpolatedWith(Theme::nova(), hover));
             g.fillEllipse(x0 + span * t - kr, ky - kr, kr * 2.0f, kr * 2.0f);
         }
         baffle = body.withTrimmedTop(3.0f);
@@ -236,17 +236,17 @@ void CabWidget::drawCabinet(juce::Graphics& g, juce::Rectangle<float> body, int 
     const float footH = 4.0f;
     const float footY = body.getBottom() - 1.0f;
     fillRound(g, { body.getX() + body.getWidth() * 0.14f, footY, footW, footH }, 2.0f,
-              CuteLookAndFeel::voidFill());
+              Theme::voidFill());
     fillRound(g, { body.getRight() - body.getWidth() * 0.14f - footW, footY, footW, footH }, 2.0f,
-              CuteLookAndFeel::voidFill());
+              Theme::voidFill());
 }
 
 void CabWidget::drawHead(juce::Graphics& g, juce::Rectangle<float> body) const
 {
     const float rad = 6.0f;
-    fillRound(g, body, rad, CuteLookAndFeel::panel().brighter(hovered ? 0.06f : 0.0f));
+    fillRound(g, body, rad, Theme::panel().brighter(hovered ? 0.06f : 0.0f));
     auto panel = body.reduced(6.0f, 4.0f);
-    fillRound(g, panel, 4.0f, CuteLookAndFeel::voidFill().interpolatedWith(CuteLookAndFeel::panel(), 0.28f));
+    fillRound(g, panel, 4.0f, Theme::voidFill().interpolatedWith(Theme::panel(), 0.28f));
 
     const int knobs = 6;
     const float ky = panel.getCentreY();
@@ -256,7 +256,7 @@ void CabWidget::drawHead(juce::Graphics& g, juce::Rectangle<float> body) const
     for (int i = 0; i < knobs; ++i)
     {
         const float t = (float) i / (float) (knobs - 1);
-        g.setColour(CuteLookAndFeel::dim());
+        g.setColour(Theme::dim());
         g.fillEllipse(x0 + span * t - kr, ky - kr, kr * 2.0f, kr * 2.0f);
     }
 }
@@ -307,7 +307,7 @@ void CabWidget::paint(juce::Graphics& g)
         drawCabinet(g, body, land == 4 ? 4 : 2, openness, false);
     }
 
-    if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+    if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
         g.setFont(laf->font(15.0f, true));
     else
         g.setFont(juce::FontOptions(15.0f, juce::Font::bold));
@@ -316,11 +316,11 @@ void CabWidget::paint(juce::Graphics& g)
     const auto sizeName = juce::String(Acoustics::sizeLand(sizeTarget));
     const auto backName = juce::String(Acoustics::backLand(backTarget));
     const float mid = caption.getCentreX();
-    g.setColour(CuteLookAndFeel::mist());
+    g.setColour(Theme::mist());
     g.drawText(sizeName, caption.withTrimmedRight(caption.getWidth() * 0.5f + 8.0f)
                                 .withRight(mid - 8.0f),
                juce::Justification::centredRight, false);
-    g.setColour(isOpen ? CuteLookAndFeel::nova() : CuteLookAndFeel::dim());
+    g.setColour(isOpen ? Theme::nova() : Theme::dim());
     g.drawText(backName, caption.withTrimmedLeft(caption.getWidth() * 0.5f)
                                 .withX(mid + 8.0f),
                juce::Justification::centredLeft, false);

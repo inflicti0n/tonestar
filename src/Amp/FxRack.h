@@ -21,7 +21,7 @@ public:
         Shift,
         Echo,
         Bloom,
-        Width,
+        Thicken,
         Sweep,
         Pulse
     };
@@ -29,7 +29,7 @@ public:
     static const char* jobName(int index, bool bloomShimmer = false)
     {
         static constexpr const char* names[] = {
-            "Squeeze", "Talk", "Shift", "Echo", "Bloom", "Width", "Sweep", "Pulse"
+            "Squeeze", "Talk", "Shift", "Echo", "Bloom", "Thicken", "Sweep", "Pulse"
         };
         if (index == Bloom && bloomShimmer)
             return "Shimmer";
@@ -47,7 +47,7 @@ public:
             "bigger / octave / organ",
             "slap / bounce / wash",
             "spring / pad",
-            "two guitars / 80s",
+            "fatten / two guitars",
             "swirl / jet",
             "chop / surf"
         };
@@ -113,9 +113,13 @@ public:
         echoLine.prepare(spec);
         echoLine.reset();
 
-        chorusLine.setMaximumDelayInSamples(juce::jmax(256, (int) std::ceil(sampleRate * 0.08)));
-        chorusLine.prepare(spec);
-        chorusLine.reset();
+        thicken.prepare((int) std::ceil(sampleRate * 0.048));
+        pitchUp.prepare((int) std::ceil(sampleRate * 0.08));
+        pitchDown.prepare((int) std::ceil(sampleRate * 0.08));
+
+        flangeLine.setMaximumDelayInSamples(juce::jmax(64, (int) std::ceil(sampleRate * 0.012)));
+        flangeLine.prepare(spec);
+        flangeLine.reset();
 
         bloom.prepare(spec);
         bloom.reset();
@@ -136,7 +140,10 @@ public:
     {
         squeeze.reset();
         echoLine.reset();
-        chorusLine.reset();
+        thicken.reset();
+        pitchUp.reset();
+        pitchDown.reset();
+        flangeLine.reset();
         bloom.reset();
         octave.reset();
         bloomMix.setCurrentAndTargetValue(0.0f);
@@ -160,14 +167,14 @@ public:
 
     void processPost(juce::AudioBuffer<float>& mono)
     {
-        const float widthAmt = getAmount(Width);
+        const float thickenAmt = getAmount(Thicken);
         const float sweepAmt = getAmount(Sweep);
         const float pulseAmt = getAmount(Pulse);
         const float echoAmt = getAmount(Echo);
         const float bloomAmt = getAmount(Bloom);
 
-        if (widthAmt >= bypassFloor)
-            processWidth(mono, widthAmt);
+        if (thickenAmt >= bypassFloor)
+            processThicken(mono, thickenAmt);
         if (sweepAmt >= bypassFloor)
             processSweep(mono, sweepAmt);
         if (pulseAmt >= bypassFloor)
@@ -225,6 +232,125 @@ private:
         }
     };
 
+    struct ThickenDelay
+    {
+        std::vector<float> buf;
+        size_t write = 0;
+        float wow = 0.0f;
+        float wowTarget = 0.0f;
+        juce::Random rng { 0x71C4E11 };
+
+        void prepare(int n)
+        {
+            buf.assign((size_t) juce::jmax(64, n), 0.0f);
+            reset();
+        }
+
+        void reset()
+        {
+            std::fill(buf.begin(), buf.end(), 0.0f);
+            write = 0;
+            wow = 0.0f;
+            wowTarget = 0.0f;
+        }
+
+        void push(float x)
+        {
+            if (buf.empty())
+                return;
+            buf[write] = x;
+            write = (write + 1) % buf.size();
+        }
+
+        float tap(float delaySamp) const
+        {
+            if (buf.empty())
+                return 0.0f;
+            const float n = (float) buf.size();
+            float pos = (float) write - juce::jlimit(1.0f, n - 2.0f, delaySamp);
+            if (pos < 0.0f)
+                pos += n;
+            return interpolate(pos);
+        }
+
+        void walkWow(float amount)
+        {
+            if (amount < 0.001f)
+            {
+                wow += 0.002f * (0.0f - wow);
+                return;
+            }
+
+            wow += 0.0004f * (wowTarget - wow);
+            if (std::abs(wowTarget - wow) < 0.03f)
+                wowTarget = rng.nextFloat() * 2.0f - 1.0f;
+        }
+
+        float wowSamples(float sr) const
+        {
+            return wow * 0.0005f * sr;
+        }
+
+    private:
+        float interpolate(float pos) const
+        {
+            const int n = (int) buf.size();
+            const int i0 = ((int) pos % n + n) % n;
+            const int i1 = (i0 + 1) % n;
+            const float frac = pos - std::floor(pos);
+            return buf[(size_t) i0] + (buf[(size_t) i1] - buf[(size_t) i0]) * frac;
+        }
+    };
+
+    struct MicroPitch
+    {
+        std::vector<float> buf;
+        size_t write = 0;
+        float read = 0.0f;
+
+        void prepare(int n)
+        {
+            buf.assign((size_t) juce::jmax(64, n), 0.0f);
+            reset();
+        }
+
+        void reset()
+        {
+            std::fill(buf.begin(), buf.end(), 0.0f);
+            write = 0;
+            read = 0.0f;
+        }
+
+        float process(float x, float rate)
+        {
+            if (buf.empty())
+                return x;
+
+            buf[write] = x;
+            const float n = (float) buf.size();
+            if (read <= 0.0f && write == 0)
+                read = n - 1.0f;
+            const float y = interpolate(read);
+            write = (write + 1) % buf.size();
+            read += rate;
+            if (read >= n)
+                read -= n;
+            if (read < 0.0f)
+                read += n;
+            return y;
+        }
+
+    private:
+        float interpolate(float pos) const
+        {
+            const int n = (int) buf.size();
+            const int i0 = ((int) pos % n + n) % n;
+            const int i1 = (i0 + 1) % n;
+            const float frac = pos - std::floor(pos);
+            return buf[(size_t) i0] + (buf[(size_t) i1] - buf[(size_t) i0]) * frac;
+        }
+    };
+
     void resetDynamics()
     {
         talkEnv = 0.0f;
@@ -233,11 +359,15 @@ private:
         octLow = 0.0f;
         octHigh = 0.0f;
         echoFilter = 0.0f;
-        chorusLfo = 0.0f;
+        flangeLp = 0.0f;
+        thicken.reset();
+        pitchUp.reset();
+        pitchDown.reset();
         sweepLfo = 0.0f;
         pulseLfo = 0.0f;
         for (auto& z : sweepZ)
             z = 0.0f;
+        flangeLine.reset();
     }
 
     static float onePole(float x, float& z, float coeff)
@@ -251,6 +381,76 @@ private:
         const float y = coeff * x + z;
         z = x - coeff * y;
         return y;
+    }
+
+    static float smoothstep01(float t)
+    {
+        t = juce::jlimit(0.0f, 1.0f, t);
+        return t * t * (3.0f - 2.0f * t);
+    }
+
+    struct SweepRecipe
+    {
+        float mix = 0.5f;
+        float phaserFb = 0.2f;
+        float flangeFb = 0.35f;
+        float rate = 0.25f;
+        float minHz = 200.0f;
+        float maxHz = 2500.0f;
+        float minDelayS = 0.002f;
+        float maxDelayS = 0.005f;
+        float thruDelayS = 0.0f;
+        float flangeT = 0.0f;
+        float toneHz = 4500.0f;
+    };
+
+    static SweepRecipe sweepRecipe(float amount)
+    {
+        SweepRecipe r;
+        r.flangeT = smoothstep01((amount - 0.65f) / 0.35f);
+        r.mix = 0.5f;
+        r.phaserFb = juce::jmap(amount, 0.2f, 0.28f);
+        r.flangeFb = juce::jmap(amount, 0.18f, 0.30f);
+        r.rate = juce::jmap(amount, 0.25f, 0.40f);
+        r.thruDelayS = 0.0f;
+        r.toneHz = 4500.0f;
+        return r;
+    }
+
+    static float sweepAllpassCoeff(float hz, double sr)
+    {
+        const float w = juce::MathConstants<float>::pi
+                        * juce::jlimit(40.0f, 8000.0f, hz) / (float) sr;
+        const float t = std::tan(juce::jlimit(0.01f, 1.2f, w));
+        return (1.0f - t) / (1.0f + t);
+    }
+
+    static float sweepAlignLfo(const SweepRecipe&)
+    {
+        return 0.5f;
+    }
+
+    void sweepVoices(float x, const SweepRecipe& recipe, float lfo, float& dryOut, float& wet)
+    {
+        const float fc = recipe.minHz + (recipe.maxHz - recipe.minHz) * lfo;
+        float phaser = x + sweepZ[4] * recipe.phaserFb;
+        const float coeff = sweepAllpassCoeff(fc, sampleRate);
+        for (int s = 0; s < 4; ++s)
+            phaser = allpass(phaser, coeff, sweepZ[s]);
+        sweepZ[4] = phaser;
+
+        const float minDelay = recipe.minDelayS * (float) sampleRate;
+        const float maxDelay = recipe.maxDelayS * (float) sampleRate;
+        const float maxSamp = (float) flangeLine.getMaximumDelayInSamples() - 4.0f;
+        const float wetDelay = juce::jlimit(2.0f, maxSamp, minDelay + lfo * (maxDelay - minDelay));
+        float delayed = flangeLine.popSample(0, wetDelay);
+        const float toneCoeff = 1.0f - std::exp(-2.0f * juce::MathConstants<float>::pi
+                                                * recipe.toneHz / (float) sampleRate);
+        delayed = onePole(delayed, flangeLp, toneCoeff);
+        flangeLine.pushSample(0, x + delayed * recipe.flangeFb * recipe.flangeT);
+
+        dryOut = x;
+        wet = phaser + (delayed - phaser) * recipe.flangeT;
     }
 
     void processSqueeze(juce::AudioBuffer<float>& mono, float amount)
@@ -314,27 +514,58 @@ private:
         }
     }
 
-    void processWidth(juce::AudioBuffer<float>& mono, float amount)
+    struct ThickenRecipe
+    {
+        float mix = 0.22f;
+        float delayA = 0.012f;
+        float delayB = 0.018f;
+        float cents = 0.5f;
+        float voiceB = 0.0f;
+        float wow = 0.0f;
+    };
+
+    static ThickenRecipe thickenRecipe(float amount)
+    {
+        ThickenRecipe r;
+        r.mix = juce::jmap(amount, 0.22f, 0.50f);
+        r.delayA = juce::jmap(amount, 0.012f, 0.022f);
+        r.delayB = juce::jmap(amount, 0.018f, 0.032f);
+        r.cents = juce::jmap(amount, 0.5f, 12.0f);
+        r.voiceB = smoothstep01((amount - 0.25f) / 0.55f);
+        r.wow = smoothstep01((amount - 0.55f) / 0.45f);
+        return r;
+    }
+
+    float thickenWet(float x, const ThickenRecipe& recipe)
+    {
+        thicken.push(x);
+        thicken.walkWow(recipe.wow);
+        const float delayA = recipe.delayA * (float) sampleRate;
+        const float delayB = recipe.delayB * (float) sampleRate
+                             + thicken.wowSamples((float) sampleRate) * recipe.wow;
+        float a = thicken.tap(delayA);
+        float b = thicken.tap(delayB);
+        if (recipe.cents > 2.0f)
+        {
+            const float rateUp = std::pow(2.0f, recipe.cents / 1200.0f);
+            const float rateDown = std::pow(2.0f, -recipe.cents / 1200.0f);
+            a = pitchUp.process(a, rateUp);
+            b = pitchDown.process(b, rateDown);
+        }
+        return a + b * recipe.voiceB;
+    }
+
+    void processThicken(juce::AudioBuffer<float>& mono, float amount)
     {
         auto* data = mono.getWritePointer(0);
         const int n = mono.getNumSamples();
-        const float mix = juce::jmap(amount, 0.18f, 0.45f);
-        const float depth = juce::jmap(amount, 0.004f, 0.011f);
-        const float rate = juce::jmap(amount, 0.35f, 0.85f);
-        const float inc = juce::MathConstants<float>::twoPi * rate / (float) sampleRate;
-        const float baseDelay = 0.016f * (float) sampleRate;
+        const auto recipe = thickenRecipe(amount);
+        const float send = recipe.mix * thickenScale;
 
         for (int i = 0; i < n; ++i)
         {
             const float x = data[i];
-            chorusLine.pushSample(0, x);
-            const float lfo = 0.5f + 0.5f * std::sin(chorusLfo);
-            chorusLfo += inc;
-            if (chorusLfo > juce::MathConstants<float>::twoPi)
-                chorusLfo -= juce::MathConstants<float>::twoPi;
-            const float delay = baseDelay + lfo * depth * (float) sampleRate;
-            const float wet = chorusLine.popSample(0, delay);
-            data[i] = x * (1.0f - mix) + 0.5f * (x + wet) * mix;
+            data[i] = x + thickenWet(x, recipe) * send;
         }
     }
 
@@ -342,31 +573,23 @@ private:
     {
         auto* data = mono.getWritePointer(0);
         const int n = mono.getNumSamples();
-        const float mix = juce::jmap(amount, 0.35f, 0.7f);
-        const float fb = juce::jmap(amount, 0.15f, 0.55f);
-        const float rate = juce::jmap(amount, 0.2f, 0.55f);
-        const float inc = juce::MathConstants<float>::twoPi * rate / (float) sampleRate;
-        const float minF = juce::jmap(amount, 180.0f, 90.0f);
-        const float maxF = juce::jmap(amount, 1400.0f, 2200.0f);
+        const auto recipe = sweepRecipe(amount);
+        const float scale = sweepPhaserScale
+                            + (sweepFlangeScale - sweepPhaserScale) * recipe.flangeT;
+        const float inc = juce::MathConstants<float>::twoPi * recipe.rate / (float) sampleRate;
 
         for (int i = 0; i < n; ++i)
         {
+            const float x = data[i];
             const float lfo = 0.5f + 0.5f * std::sin(sweepLfo);
             sweepLfo += inc;
             if (sweepLfo > juce::MathConstants<float>::twoPi)
                 sweepLfo -= juce::MathConstants<float>::twoPi;
 
-            const float fc = minF + (maxF - minF) * lfo;
-            const float w = juce::MathConstants<float>::pi * fc / (float) sampleRate;
-            const float t = std::tan(juce::jlimit(0.01f, 1.2f, w));
-            const float coeff = (1.0f - t) / (1.0f + t);
-
-            float x = data[i] + sweepZ[4] * fb;
-            x = juce::jlimit(-1.4f, 1.4f, x);
-            for (int s = 0; s < 4; ++s)
-                x = allpass(x, coeff, sweepZ[s]);
-            sweepZ[4] = x;
-            data[i] = data[i] * (1.0f - mix) + x * mix;
+            float dryOut = x;
+            float wet = x;
+            sweepVoices(x, recipe, lfo, dryOut, wet);
+            data[i] = x + ((dryOut - x) + wet * recipe.mix) * scale;
         }
     }
 
@@ -516,6 +739,63 @@ private:
         }
     }
 
+    void runThickenProbe(juce::AudioBuffer<float>& dryBuf, juce::AudioBuffer<float>& wetBuf)
+    {
+        thicken.reset();
+        pitchUp.reset();
+        pitchDown.reset();
+        const auto recipe = thickenRecipe(1.0f);
+        const auto* dry = dryBuf.getReadPointer(0);
+        auto* wet = wetBuf.getWritePointer(0);
+        const int n = dryBuf.getNumSamples();
+        for (int i = 0; i < n; ++i)
+            wet[i] = thickenWet(dry[i], recipe);
+    }
+
+    void runSweepPhaserProbe(juce::AudioBuffer<float>& dryBuf, juce::AudioBuffer<float>& wetBuf)
+    {
+        for (auto& z : sweepZ)
+            z = 0.0f;
+        flangeLine.reset();
+
+        const auto recipe = sweepRecipe(0.0f);
+        const float lfo = 0.5f;
+        const auto* dry = dryBuf.getReadPointer(0);
+        auto* wet = wetBuf.getWritePointer(0);
+        const int n = dryBuf.getNumSamples();
+
+        for (int i = 0; i < n; ++i)
+        {
+            const float x = dry[i];
+            float dryOut = x;
+            float voice = x;
+            sweepVoices(x, recipe, lfo, dryOut, voice);
+            wet[i] = (dryOut - x) + voice * recipe.mix;
+        }
+    }
+
+    void runSweepFlangeProbe(juce::AudioBuffer<float>& dryBuf, juce::AudioBuffer<float>& wetBuf)
+    {
+        for (auto& z : sweepZ)
+            z = 0.0f;
+        flangeLine.reset();
+
+        const auto recipe = sweepRecipe(1.0f);
+        const float lfo = sweepAlignLfo(recipe);
+        const auto* dry = dryBuf.getReadPointer(0);
+        auto* wet = wetBuf.getWritePointer(0);
+        const int n = dryBuf.getNumSamples();
+
+        for (int i = 0; i < n; ++i)
+        {
+            const float x = dry[i];
+            float dryOut = x;
+            float voice = x;
+            sweepVoices(x, recipe, lfo, dryOut, voice);
+            wet[i] = (dryOut - x) + voice * recipe.mix;
+        }
+    }
+
     void runEchoProbe(juce::AudioBuffer<float>& dryBuf, juce::AudioBuffer<float>& wetBuf, const EchoRecipe& recipe)
     {
         echoLine.reset();
@@ -575,6 +855,30 @@ private:
                                               probeN - echoSkip);
         echoLine.reset();
         echoFilter = 0.0f;
+
+        const int sweepSkip = juce::jmin(512, probeN / 4);
+        runSweepPhaserProbe(probeDry, probeWet);
+        sweepPhaserScale = Loudness::wetSendScale(probeDry.getReadPointer(0) + sweepSkip,
+                                                  probeWet.getReadPointer(0) + sweepSkip,
+                                                  probeN - sweepSkip);
+        runSweepFlangeProbe(probeDry, probeWet);
+        sweepFlangeScale = Loudness::wetSendScale(probeDry.getReadPointer(0) + sweepSkip,
+                                                  probeWet.getReadPointer(0) + sweepSkip,
+                                                  probeN - sweepSkip);
+        for (auto& z : sweepZ)
+            z = 0.0f;
+        flangeLine.reset();
+        flangeLp = 0.0f;
+        sweepLfo = 0.0f;
+
+        const int thickenSkip = juce::jmin(1024, probeN / 4);
+        runThickenProbe(probeDry, probeWet);
+        thickenScale = Loudness::wetSendScale(probeDry.getReadPointer(0) + thickenSkip,
+                                              probeWet.getReadPointer(0) + thickenSkip,
+                                              probeN - thickenSkip);
+        thicken.reset();
+        pitchUp.reset();
+        pitchDown.reset();
     }
 
     std::array<std::atomic<float>, 8> amounts {};
@@ -584,6 +888,9 @@ private:
     int maxBlock = 512;
     float bloomWetScale = 1.0f;
     float echoWetScale = 1.0f;
+    float sweepPhaserScale = 1.0f;
+    float sweepFlangeScale = 1.0f;
+    float thickenScale = 1.0f;
     float shimmerOctaveScale = 1.0f;
     float lastBloomRecipe = 1.0f;
     float lastEchoTimeMs = 140.0f;
@@ -593,9 +900,12 @@ private:
     juce::SmoothedValue<float> echoMix;
     juce::dsp::Compressor<float> squeeze;
     juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Linear> echoLine;
-    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Linear> chorusLine;
+    juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Lagrange3rd> flangeLine;
     juce::dsp::Reverb bloom;
     CheapOctave octave;
+    ThickenDelay thicken;
+    MicroPitch pitchUp;
+    MicroPitch pitchDown;
     juce::AudioBuffer<float> work;
 
     float talkEnv = 0.0f;
@@ -604,7 +914,7 @@ private:
     float octLow = 0.0f;
     float octHigh = 0.0f;
     float echoFilter = 0.0f;
-    float chorusLfo = 0.0f;
+    float flangeLp = 0.0f;
     float sweepLfo = 0.0f;
     float pulseLfo = 0.0f;
     float sweepZ[5] {};

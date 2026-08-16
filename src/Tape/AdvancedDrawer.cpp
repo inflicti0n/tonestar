@@ -1,5 +1,6 @@
 #include "Tape/AdvancedDrawer.h"
-#include "Appearance/CuteLookAndFeel.h"
+#include "Appearance/Theme.h"
+#include "Appearance/WindowShell.h"
 #include <cmath>
 
 void AdvancedDrawer::BpmField::paint(juce::Graphics& g)
@@ -7,12 +8,12 @@ void AdvancedDrawer::BpmField::paint(juce::Graphics& g)
     if (editing)
         return;
 
-    if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+    if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
         g.setFont(laf->font(22.0f, true));
     else
         g.setFont(juce::FontOptions(22.0f, juce::Font::bold));
 
-    g.setColour(CuteLookAndFeel::mist());
+    g.setColour(Theme::mist());
     g.drawText(juce::String(juce::roundToInt(bpm)), getLocalBounds(),
                juce::Justification::centredRight, false);
 }
@@ -79,15 +80,15 @@ void AdvancedDrawer::BpmField::startEdit()
     {
         editor.setJustification(juce::Justification::centredRight);
         editor.setInputRestrictions(3, "0123456789");
-        editor.setColour(juce::TextEditor::backgroundColourId, CuteLookAndFeel::panel());
-        editor.setColour(juce::TextEditor::textColourId, CuteLookAndFeel::mist());
+        editor.setColour(juce::TextEditor::backgroundColourId, Theme::panel());
+        editor.setColour(juce::TextEditor::textColourId, Theme::mist());
         editor.onReturnKey = [this] { finishEdit(); };
         editor.onFocusLost = [this] { finishEdit(); };
         addAndMakeVisible(editor);
         resized();
     }
 
-    if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+    if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
         editor.setFont(laf->font(22.0f, true));
     editor.setText(juce::String(juce::roundToInt(bpm)), juce::dontSendNotification);
     editor.setVisible(true);
@@ -175,68 +176,104 @@ void AdvancedDrawer::Sparkle::paint(juce::Graphics& g)
     const float lit = juce::jlimit(0.0f, 1.0f, (punch - 1.0f) / 0.6f);
     const float scale = armed ? (0.72f + 0.28f * punch) : 0.62f;
     auto colour = armed
-                      ? CuteLookAndFeel::dim().interpolatedWith(CuteLookAndFeel::starlight(), 0.35f + 0.65f * lit)
-                      : CuteLookAndFeel::dim().withAlpha(0.45f);
+                      ? Theme::dim().interpolatedWith(Theme::starlight(), 0.35f + 0.65f * lit)
+                      : Theme::dim().withAlpha(0.45f);
     if (lit > 0.15f)
-        colour = colour.interpolatedWith(CuteLookAndFeel::nova(), lit * 0.55f);
+        colour = colour.interpolatedWith(Theme::nova(), lit * 0.55f);
 
     g.setColour(colour);
     g.fillPath(starPath(scale));
     g.setColour(armed ? juce::Colours::white.withAlpha(0.55f + 0.45f * lit)
-                      : CuteLookAndFeel::dim().withAlpha(0.35f));
+                      : Theme::dim().withAlpha(0.35f));
     g.fillPath(starPath(scale * 0.38f));
 }
 
 void AdvancedDrawer::TunerFace::setReading(const TunerReading& next, bool shouldArm)
 {
-    reading = next;
     armed = shouldArm;
+    reading = next;
+    const bool voiced = shouldArm && next.voiced;
+    if (! voiced)
+        displayCents = next.cents;
+    else if (! wasVoiced)
+        displayCents = next.cents;
+    else
+        displayCents += 0.28f * (next.cents - displayCents);
+    wasVoiced = voiced;
     repaint();
 }
 
 void AdvancedDrawer::TunerFace::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    const float trackH = 14.0f;
+    const float trackH = 16.0f;
     auto track = juce::Rectangle<float>(bounds.getX() + 4.0f,
-                                        bounds.getCentreY() - trackH * 0.5f,
+                                        bounds.getCentreY() - trackH * 0.5f - 6.0f,
                                         juce::jmax(8.0f, bounds.getWidth() - 8.0f),
                                         trackH);
-    auto text = juce::Rectangle<float>(bounds.getX(), track.getY() - 26.0f,
-                                       bounds.getWidth(), 24.0f);
+    auto text = juce::Rectangle<float>(bounds.getX(), track.getY() - 24.0f,
+                                       bounds.getWidth(), 22.0f);
+    auto offset = juce::Rectangle<float>(bounds.getX(), track.getBottom() + 2.0f,
+                                         bounds.getWidth(), 20.0f);
 
-    if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+    auto* laf = dynamic_cast<Theme*>(&getLookAndFeel());
+    if (laf != nullptr)
         g.setFont(laf->font(20.0f, true));
     else
         g.setFont(juce::FontOptions(20.0f, juce::Font::bold));
 
-    if (armed && reading.voiced)
+    const bool live = armed && reading.voiced;
+    const bool inTune = std::abs(displayCents) < 5.0f;
+    if (live)
     {
-        const bool inTune = std::abs(reading.cents) < 5.0f;
-        g.setColour(inTune ? CuteLookAndFeel::starlight() : CuteLookAndFeel::mist());
+        g.setColour(inTune ? Theme::starlight() : Theme::mist());
         g.drawText(Tuner::noteLabel(reading.midi) + "  "
                        + juce::String(juce::roundToInt(reading.hz)) + " Hz",
                    text, juce::Justification::centred, false);
     }
     else
     {
-        g.setColour(CuteLookAndFeel::dim());
+        g.setColour(Theme::dim());
         g.drawText(armed ? "--" : "", text, juce::Justification::centred, false);
     }
 
-    g.setColour(CuteLookAndFeel::voidFill());
+    g.setColour(Theme::voidFill());
     g.fillRoundedRectangle(track, 5.0f);
-    const float midX = track.getCentreX();
-    g.setColour(CuteLookAndFeel::dim().withAlpha(0.85f));
-    g.fillRect(midX - 1.0f, track.getY() + 2.0f, 2.0f, track.getHeight() - 4.0f);
 
-    if (armed && reading.voiced)
+    const float innerL = track.getX() + 8.0f;
+    const float innerW = juce::jmax(1.0f, track.getWidth() - 16.0f);
+    const float midY = track.getCentreY();
+    auto xAt = [innerL, innerW](float cents)
     {
-        const float t = juce::jlimit(0.0f, 1.0f, (reading.cents + 50.0f) / 100.0f);
-        const float x = track.getX() + 8.0f + t * (track.getWidth() - 16.0f);
-        const bool inTune = std::abs(reading.cents) < 5.0f;
-        g.setColour(inTune ? CuteLookAndFeel::starlight() : CuteLookAndFeel::nova());
-        g.fillEllipse(x - 5.0f, track.getCentreY() - 5.0f, 10.0f, 10.0f);
+        return innerL + (cents + 50.0f) / 100.0f * innerW;
+    };
+
+    for (int step = -5; step <= 5; ++step)
+    {
+        const float x = xAt((float) step * 10.0f);
+        const bool major = step == 0 || std::abs(step) == 5;
+        const float h = major ? 10.0f : 6.0f;
+        g.setColour(Theme::dim().withAlpha(major ? 0.90f : 0.45f));
+        g.fillRect(x - 0.5f, midY - h * 0.5f, 1.0f, h);
+    }
+
+    if (live)
+    {
+        const float x = xAt(juce::jlimit(-50.0f, 50.0f, displayCents));
+        g.setColour(inTune ? Theme::starlight() : Theme::nova());
+        g.fillRect(x - 1.0f, track.getY() - 4.0f, 2.0f, track.getHeight() + 8.0f);
+
+        const float semis = displayCents / 100.0f;
+        const bool deadOn = std::abs(displayCents) < 0.5f;
+        juce::String off = "0";
+        if (! deadOn)
+            off = (semis > 0.0f ? "+" : "") + juce::String(semis, 2);
+        if (laf != nullptr)
+            g.setFont(laf->font(18.0f, true));
+        else
+            g.setFont(juce::FontOptions(18.0f, juce::Font::bold));
+        g.setColour(deadOn ? Theme::starlight() : Theme::mist());
+        g.drawText(off, offset, juce::Justification::centred, false);
     }
 }
 
@@ -269,8 +306,8 @@ AdvancedDrawer::LaneRow::LaneRow(int indexToUse)
     editor.setJustification(juce::Justification::topLeft);
     editor.onReturnKey = [this] { finishNameEdit(); };
     editor.onFocusLost = [this] { finishNameEdit(); };
-    editor.setColour(juce::TextEditor::backgroundColourId, CuteLookAndFeel::voidFill());
-    editor.setColour(juce::TextEditor::textColourId, CuteLookAndFeel::mist());
+    editor.setColour(juce::TextEditor::backgroundColourId, Theme::voidFill());
+    editor.setColour(juce::TextEditor::textColourId, Theme::mist());
     addChildComponent(editor);
 }
 
@@ -394,7 +431,7 @@ void AdvancedDrawer::LaneRow::drawWave(juce::Graphics& g, juce::Rectangle<float>
     const int pixels = juce::jmax(1, (int) clip.getWidth());
     const float mid = clip.getCentreY();
     const float amp = clip.getHeight() * 0.46f;
-    g.setColour(CuteLookAndFeel::starlight().interpolatedWith(CuteLookAndFeel::mist(), 0.25f));
+    g.setColour(Theme::starlight().interpolatedWith(Theme::mist(), 0.25f));
     for (int x = 0; x < pixels; ++x)
     {
         const int h0 = hop0 + x * hopsN / pixels;
@@ -412,43 +449,43 @@ void AdvancedDrawer::LaneRow::paint(juce::Graphics& g)
     auto bounds = getLocalBounds().toFloat();
     const bool armed = tape != nullptr && tape->getArmedLane() == index;
     const bool recHere = tape != nullptr && tape->isRecording() && tape->getRecLane() == index;
-    auto fill = CuteLookAndFeel::panel();
+    auto fill = Theme::panel();
     if (armed)
-        fill = fill.interpolatedWith(CuteLookAndFeel::nova(), 0.10f);
+        fill = fill.interpolatedWith(Theme::nova(), 0.10f);
     if (recHere)
-        fill = fill.interpolatedWith(CuteLookAndFeel::flare(), 0.12f);
+        fill = fill.interpolatedWith(Theme::flare(), 0.12f);
     g.setColour(fill);
-    g.fillRoundedRectangle(bounds, CuteLookAndFeel::corner());
+    g.fillRoundedRectangle(bounds, Theme::corner());
 
     if (! editing && tape != nullptr)
     {
-        if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+        if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
             g.setFont(laf->font(16.0f, true));
-        g.setColour(CuteLookAndFeel::mist());
+        g.setColour(Theme::mist());
         g.drawText(tape->getName(index), nameBounds(), juce::Justification::topLeft, true);
     }
 
     const auto bar = levelBounds();
     const float amount = tape != nullptr ? juce::jlimit(0.0f, 1.0f, tape->getLevel(index)) : 1.0f;
-    g.setColour(CuteLookAndFeel::voidFill());
+    g.setColour(Theme::voidFill());
     g.fillRoundedRectangle(bar, 5.0f);
-    g.setColour(CuteLookAndFeel::starlight());
+    g.setColour(Theme::starlight());
     g.fillRoundedRectangle(bar.withTrimmedTop(bar.getHeight() * (1.0f - amount)), 5.0f);
     g.fillEllipse(levelThumb());
 
     const auto panBar = panBounds();
-    g.setColour(CuteLookAndFeel::voidFill());
+    g.setColour(Theme::voidFill());
     g.fillRoundedRectangle(panBar, 5.0f);
     const float midX = panBar.getCentreX();
     const float thumbX = panThumb().getCentreX();
     auto panFill = juce::Rectangle<float>(juce::jmin(midX, thumbX), panBar.getY(),
                                           std::abs(thumbX - midX), panBar.getHeight());
-    g.setColour(CuteLookAndFeel::starlight());
+    g.setColour(Theme::starlight());
     g.fillRoundedRectangle(panFill, 5.0f);
     g.fillEllipse(panThumb());
 
     const auto wave = waveBounds();
-    g.setColour(CuteLookAndFeel::voidFill());
+    g.setColour(Theme::voidFill());
     g.fillRoundedRectangle(wave, 6.0f);
 
     if (timeline != nullptr)
@@ -462,10 +499,10 @@ void AdvancedDrawer::LaneRow::paint(juce::Graphics& g)
         {
             juce::Graphics::ScopedSaveState save(g);
             g.reduceClipRegion(wave.getSmallestIntegerContainer());
-            auto clipFill = recHere ? CuteLookAndFeel::flare().interpolatedWith(CuteLookAndFeel::panel(), 0.35f)
-                                    : CuteLookAndFeel::panel().interpolatedWith(CuteLookAndFeel::starlight(), 0.18f);
+            auto clipFill = recHere ? Theme::flare().interpolatedWith(Theme::panel(), 0.35f)
+                                    : Theme::panel().interpolatedWith(Theme::starlight(), 0.18f);
             if (tape->isMuted(index))
-                clipFill = clipFill.interpolatedWith(CuteLookAndFeel::voidFill(), 0.45f);
+                clipFill = clipFill.interpolatedWith(Theme::voidFill(), 0.45f);
             g.setColour(clipFill);
             g.fillRoundedRectangle(clip, 5.0f);
             const auto view = tape->getLane(index);
@@ -475,21 +512,21 @@ void AdvancedDrawer::LaneRow::paint(juce::Graphics& g)
                 const float d = 14.0f;
                 const auto badge = juce::Rectangle<float>(d, d)
                                        .withPosition(clip.getX() + 3.0f, clip.getY() + 2.0f);
-                g.setColour(tape->isMuted(index) ? CuteLookAndFeel::starlight()
-                                                 : CuteLookAndFeel::nova());
+                g.setColour(tape->isMuted(index) ? Theme::starlight()
+                                                 : Theme::nova());
                 g.fillEllipse(badge);
-                g.setColour(CuteLookAndFeel::onAccent());
-                if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+                g.setColour(Theme::onAccent());
+                if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
                     g.setFont(laf->font(11.0f, true));
                 g.drawText("V", badge, juce::Justification::centred, false);
             }
             if (selected && ! recHere)
             {
-                g.setColour(CuteLookAndFeel::starlight());
+                g.setColour(Theme::starlight());
                 g.drawRoundedRectangle(clip.reduced(0.8f), 5.0f, 1.6f);
                 deleteBounds = deleteBoundsFor(vis);
-                g.setColour(deleteHot ? CuteLookAndFeel::flare() : CuteLookAndFeel::dim());
-                if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+                g.setColour(deleteHot ? Theme::flare() : Theme::dim());
+                if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
                     g.setFont(laf->font(12.0f, true));
                 g.drawText("X", deleteBounds, juce::Justification::centred, false);
             }
@@ -500,7 +537,7 @@ void AdvancedDrawer::LaneRow::paint(juce::Graphics& g)
             const float px = timeline->sampleToX(tape->getPlayhead(), wave.getX());
             if (px >= wave.getX() && px <= wave.getRight())
             {
-                g.setColour(CuteLookAndFeel::nova().withAlpha(0.85f));
+                g.setColour(Theme::nova().withAlpha(0.85f));
                 g.fillRect(px, wave.getY(), 1.6f, wave.getHeight());
             }
         }
@@ -765,7 +802,7 @@ void AdvancedDrawer::LaneRow::startNameEdit()
         return;
 
     editing = true;
-    if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+    if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
         editor.setFont(laf->font(16.0f, true));
     editor.setText(tape->getName(index), juce::dontSendNotification);
     editor.setVisible(true);
@@ -943,7 +980,7 @@ void AdvancedDrawer::Ruler::paint(juce::Graphics& g)
     if (wave.getWidth() <= 1.0f)
         return;
 
-    g.setColour(CuteLookAndFeel::voidFill());
+    g.setColour(Theme::voidFill());
     g.fillRoundedRectangle(wave.reduced(0.0f, 1.0f), 4.0f);
 
     const int spb = timeline->samplesPerBeat();
@@ -952,7 +989,7 @@ void AdvancedDrawer::Ruler::paint(juce::Graphics& g)
     const int last = (int) std::ceil((double) (timeline->viewStart + vis) / (double) spb) + 1;
     const float h = (float) getHeight();
 
-    if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+    if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
         g.setFont(laf->font(11.0f, true));
 
     for (int b = first; b <= last; ++b)
@@ -967,22 +1004,22 @@ void AdvancedDrawer::Ruler::paint(juce::Graphics& g)
         const bool bar = (b % 4) == 0;
         if (bar)
         {
-            g.setColour(CuteLookAndFeel::starlight().withAlpha(0.40f));
+            g.setColour(Theme::starlight().withAlpha(0.40f));
             g.fillRect(x, h - 11.0f, 1.0f, 11.0f);
-            g.setColour(CuteLookAndFeel::mist().withAlpha(0.85f));
+            g.setColour(Theme::mist().withAlpha(0.85f));
             g.drawText(juce::String(b / 4 + 1), (int) x + 3, 1, 28, 12,
                        juce::Justification::centredLeft, false);
         }
         else if (timeline->showQuarters())
         {
-            g.setColour(CuteLookAndFeel::mist().withAlpha(0.22f));
+            g.setColour(Theme::mist().withAlpha(0.22f));
             g.fillRect(x, h - 6.0f, 1.0f, 6.0f);
         }
     }
 
     if (timeline->showEighths())
     {
-        g.setColour(CuteLookAndFeel::mist().withAlpha(0.12f));
+        g.setColour(Theme::mist().withAlpha(0.12f));
         for (int b = first; b <= last; ++b)
         {
             if (b < 0)
@@ -1002,11 +1039,11 @@ void AdvancedDrawer::Ruler::paint(juce::Graphics& g)
         auto bar = loopBar().getIntersection(wave);
         if (! bar.isEmpty())
         {
-            g.setColour(CuteLookAndFeel::nova().withAlpha(0.28f));
+            g.setColour(Theme::nova().withAlpha(0.28f));
             g.fillRoundedRectangle(bar, 3.0f);
             auto left = loopEdge(false).getIntersection(wave);
             auto right = loopEdge(true).getIntersection(wave);
-            g.setColour(CuteLookAndFeel::nova().interpolatedWith(CuteLookAndFeel::starlight(), 0.35f));
+            g.setColour(Theme::nova().interpolatedWith(Theme::starlight(), 0.35f));
             if (! left.isEmpty())
                 g.fillRoundedRectangle(left, 2.0f);
             if (! right.isEmpty())
@@ -1020,7 +1057,7 @@ void AdvancedDrawer::Ruler::paint(juce::Graphics& g)
 
     juce::Path tri;
     tri.addTriangle(px - 6.5f, loopY, px + 6.5f, loopY, px, loopY + loopH);
-    g.setColour(CuteLookAndFeel::starlight());
+    g.setColour(Theme::starlight());
     g.fillPath(tri);
 }
 
@@ -1163,16 +1200,16 @@ namespace
             {
                 editor.setJustification(juce::Justification::centredRight);
                 editor.setInputRestrictions(8, "0123456789.");
-                editor.setColour(juce::TextEditor::backgroundColourId, CuteLookAndFeel::panel());
-                editor.setColour(juce::TextEditor::textColourId, CuteLookAndFeel::mist());
+                editor.setColour(juce::TextEditor::backgroundColourId, Theme::panel());
+                editor.setColour(juce::TextEditor::textColourId, Theme::mist());
             };
 
             startLabel.setText("Start (s)", juce::dontSendNotification);
             lengthLabel.setText("Length (s)", juce::dontSendNotification);
             hint.setText("Same mix as playback. 24-bit stereo WAV.", juce::dontSendNotification);
-            startLabel.setColour(juce::Label::textColourId, CuteLookAndFeel::mist());
-            lengthLabel.setColour(juce::Label::textColourId, CuteLookAndFeel::mist());
-            hint.setColour(juce::Label::textColourId, CuteLookAndFeel::dim());
+            startLabel.setColour(juce::Label::textColourId, Theme::mist());
+            lengthLabel.setColour(juce::Label::textColourId, Theme::mist());
+            hint.setColour(juce::Label::textColourId, Theme::dim());
             hint.setJustificationType(juce::Justification::centredLeft);
 
             const double sr = juce::jmax(1.0, tape.getSampleRate());
@@ -1191,8 +1228,8 @@ namespace
             lengthField.setText(secondsText(length), juce::dontSendNotification);
 
             exportButton.setButtonText("Export WAV");
-            exportButton.setColour(juce::TextButton::buttonColourId, CuteLookAndFeel::nova());
-            exportButton.setColour(juce::TextButton::textColourOffId, CuteLookAndFeel::onAccent());
+            exportButton.setColour(juce::TextButton::buttonColourId, Theme::nova());
+            exportButton.setColour(juce::TextButton::textColourOffId, Theme::onAccent());
             exportButton.onClick = [this] { chooseAndExport(); };
 
             addAndMakeVisible(startLabel);
@@ -1205,7 +1242,7 @@ namespace
 
         void lookAndFeelChanged() override
         {
-            if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+            if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
             {
                 startLabel.setFont(laf->font(16.0f, true));
                 lengthLabel.setFont(laf->font(16.0f, true));
@@ -1217,7 +1254,7 @@ namespace
 
         void paint(juce::Graphics& g) override
         {
-            g.fillAll(CuteLookAndFeel::voidFill());
+            g.fillAll(Theme::voidFill());
         }
 
         void resized() override
@@ -1261,8 +1298,7 @@ namespace
                 juce::String error;
                 if (! tape.exportMix(file, start, length, error))
                 {
-                    juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
-                                                           "Export tape", error);
+                    WindowShell::showAlert("Export tape", error, &getLookAndFeel());
                     return;
                 }
 
@@ -1386,7 +1422,7 @@ AdvancedDrawer::AdvancedDrawer()
     };
     viewport.setViewedComponent(&list, false);
     viewport.setScrollBarsShown(true, false);
-    viewport.getVerticalScrollBar().setColour(juce::ScrollBar::thumbColourId, CuteLookAndFeel::dim());
+    viewport.getVerticalScrollBar().setColour(juce::ScrollBar::thumbColourId, Theme::dim());
     viewport.getVerticalScrollBar().setColour(juce::ScrollBar::trackColourId, juce::Colours::transparentBlack);
 
     addAndMakeVisible(playButton);
@@ -1497,12 +1533,12 @@ bool AdvancedDrawer::deleteSelectedClip()
 void AdvancedDrawer::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    g.setColour(CuteLookAndFeel::voidFill().interpolatedWith(CuteLookAndFeel::panel(), 0.35f));
+    g.setColour(Theme::voidFill().interpolatedWith(Theme::panel(), 0.35f));
     g.fillRoundedRectangle(bounds.reduced(8.0f, 12.0f), 12.0f);
 
-    if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+    if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
         g.setFont(laf->font(15.0f, true));
-    g.setColour(CuteLookAndFeel::dim());
+    g.setColour(Theme::dim());
     g.drawText("Tape", 16, 16, getWidth() - 32, 28, juce::Justification::centredLeft, false);
 }
 
@@ -1555,23 +1591,13 @@ void AdvancedDrawer::showExport()
         return;
     if (tape->isRecording())
     {
-        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
-                                               "Export tape", "Stop recording first.");
+        WindowShell::showAlert("Export tape", "Stop recording first.", &getLookAndFeel());
         return;
     }
 
-    auto* panel = new TapeExportPanel(*tape);
-    panel->setLookAndFeel(&getLookAndFeel());
+    auto panel = std::make_unique<TapeExportPanel>(*tape);
     panel->setSize(340, 196);
-
-    juce::DialogWindow::LaunchOptions options;
-    options.content.setOwned(panel);
-    options.dialogTitle = "Export tape";
-    options.dialogBackgroundColour = CuteLookAndFeel::voidFill();
-    options.escapeKeyTriggersCloseButton = true;
-    options.useNativeTitleBar = true;
-    options.resizable = false;
-    options.launchAsync();
+    WindowShell::launchDialog("Export tape", std::move(panel), 340, 196, false, &getLookAndFeel());
 }
 
 void AdvancedDrawer::applyWheel(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel, float waveX)

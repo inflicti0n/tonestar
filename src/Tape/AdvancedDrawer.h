@@ -31,15 +31,15 @@ public:
     void mouseDown(const juce::MouseEvent&) override;
     void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
 
-    CircleToggle playButton { "Play", CuteLookAndFeel::starlight(), CircleIcon::Play };
-    CircleToggle stopButton { "Stop", CuteLookAndFeel::mist(), CircleIcon::Stop };
-    CircleToggle recordButton { "Record", CuteLookAndFeel::flare(), CircleIcon::Record };
-    CircleToggle quantizeButton { "Quantize", CuteLookAndFeel::nova(), CircleIcon::Quantize };
-    CircleToggle loopButton { "Loop", CuteLookAndFeel::nova(), CircleIcon::Loop };
-    CircleToggle folderButton { "Tape", CuteLookAndFeel::panel(), CircleIcon::Folder };
-    CircleToggle exportButton { "Export", CuteLookAndFeel::panel(), CircleIcon::Export };
-    CircleToggle metroButton { "Metronome", CuteLookAndFeel::nova(), CircleIcon::Metro };
-    CircleToggle tunerButton { "Tuner", CuteLookAndFeel::nova(), CircleIcon::Tune };
+    CircleToggle playButton { "Play", Theme::starlight(), CircleIcon::Play };
+    CircleToggle stopButton { "Stop", Theme::mist(), CircleIcon::Stop };
+    CircleToggle recordButton { "Record", Theme::flare(), CircleIcon::Record };
+    CircleToggle quantizeButton { "Quantize", Theme::nova(), CircleIcon::Quantize };
+    CircleToggle loopButton { "Loop", Theme::nova(), CircleIcon::Loop };
+    CircleToggle folderButton { "Tape", Theme::panel(), CircleIcon::Folder };
+    CircleToggle exportButton { "Export", Theme::panel(), CircleIcon::Export };
+    CircleToggle metroButton { "Metronome", Theme::nova(), CircleIcon::Metro };
+    CircleToggle tunerButton { "Tuner", Theme::nova(), CircleIcon::Tune };
 
     std::function<void(float)> onBpmChange;
     std::function<void()> onChanged;
@@ -99,7 +99,9 @@ private:
 
     private:
         TunerReading reading;
+        float displayCents = 0.0f;
         bool armed = false;
+        bool wasVoiced = false;
     };
 
     class LaneRow : public juce::Component
@@ -151,7 +153,7 @@ private:
         int index = 0;
         TapeEngine* tape = nullptr;
         TapeTimeline* timeline = nullptr;
-        CircleToggle muteButton { "Mute", CuteLookAndFeel::flare(), CircleIcon::Mute };
+        CircleToggle muteButton { "Mute", Theme::flare(), CircleIcon::Mute };
         juce::TextEditor editor;
         bool editing = false;
         bool selected = false;

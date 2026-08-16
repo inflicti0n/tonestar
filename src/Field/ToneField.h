@@ -1,7 +1,7 @@
 #pragma once
 
 #include "App/RigMode.h"
-#include "Appearance/CuteLookAndFeel.h"
+#include "Appearance/Theme.h"
 #include "Visuals/FieldEnergy.h"
 #include "Visuals/FieldSpectrum.h"
 #include "Amp/FxRack.h"

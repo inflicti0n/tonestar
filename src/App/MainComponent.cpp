@@ -1,23 +1,24 @@
 #include "App/MainComponent.h"
 #include "App/AppLog.h"
+#include "Appearance/WindowShell.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 
 MainComponent::MainComponent()
 {
     AppLog::note("MainComponent ctor");
-    setLookAndFeel(&lookAndFeel);
+    setLookAndFeel(&theme);
     setOpaque(true);
     setWantsKeyboardFocus(true);
 
     addAndMakeVisible(titleBar);
 
     latencyLabel.setJustificationType(juce::Justification::centredRight);
-    latencyLabel.setColour(juce::Label::textColourId, CuteLookAndFeel::dim());
-    latencyLabel.setFont(lookAndFeel.font(13.0f));
+    latencyLabel.setColour(juce::Label::textColourId, Theme::dim());
+    latencyLabel.setFont(theme.font(13.0f));
     addAndMakeVisible(latencyLabel);
 
     inputChannelLabel.setJustificationType(juce::Justification::centredLeft);
-    inputChannelLabel.setFont(lookAndFeel.font(15.0f, true));
+    inputChannelLabel.setFont(theme.font(15.0f, true));
     addAndMakeVisible(inputChannelLabel);
 
     inputChannelBox.onChange = [this]
@@ -47,7 +48,7 @@ MainComponent::MainComponent()
     };
     addAndMakeVisible(inputGain);
     inputGainLabel.setJustificationType(juce::Justification::centred);
-    inputGainLabel.setFont(lookAndFeel.font(15.0f, true));
+    inputGainLabel.setFont(theme.font(15.0f, true));
     addAndMakeVisible(inputGainLabel);
 
     setupGainSlider(outputGain, -60.0f, 6.0f, 0.0f);
@@ -58,7 +59,7 @@ MainComponent::MainComponent()
     };
     addAndMakeVisible(outputGain);
     outputGainLabel.setJustificationType(juce::Justification::centred);
-    outputGainLabel.setFont(lookAndFeel.font(15.0f, true));
+    outputGainLabel.setFont(theme.font(15.0f, true));
     addAndMakeVisible(outputGainLabel);
 
     cab.onChange = [this]
@@ -219,7 +220,7 @@ MainComponent::MainComponent()
         field.setPlasmaLook(look);
     };
     field.setPlasmaLook(plasmaTune.getLook());
-    plasmaTune.setLookAndFeel(&lookAndFeel);
+    plasmaTune.setLookAndFeel(&theme);
     addChildComponent(plasmaTune);
 
     copyButton.onClick = [this] { copySlug(); };
@@ -231,12 +232,12 @@ MainComponent::MainComponent()
     addAndMakeVisible(applyButton);
 
     slugLabel.setJustificationType(juce::Justification::centredLeft);
-    slugLabel.setFont(lookAndFeel.font(15.0f, true));
+    slugLabel.setFont(theme.font(15.0f, true));
     addAndMakeVisible(slugLabel);
 
     slugField.setJustification(juce::Justification::centredLeft);
-    slugField.setFont(lookAndFeel.font(16.0f));
-    slugField.setTextToShowWhenEmpty("paste slug", CuteLookAndFeel::dim());
+    slugField.setFont(theme.font(16.0f));
+    slugField.setTextToShowWhenEmpty("paste slug", Theme::dim());
     slugField.setInputRestrictions(24, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789*-_");
     slugField.onReturnKey = [this] { tryImportSlug(); };
     slugField.onFocusLost = [this]
@@ -303,9 +304,7 @@ void MainComponent::startAudio()
 
     if (! ok && ! selfTesting)
     {
-        juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
-                                               "Audio",
-                                               "Could not start audio: " + ctx.error);
+        WindowShell::showAlert("Audio", "Could not start audio: " + ctx.error, &theme);
     }
 
     player.setProcessor(&processor);
@@ -550,8 +549,14 @@ void MainComponent::updateLatencyLabel()
         {
             const double ms = 1000.0 * (double) (device->getInputLatencyInSamples()
                                                  + device->getOutputLatencyInSamples()) / sr;
-            latencyLabel.setText(juce::String(juce::roundToInt(ms)) + " ms",
-                                 juce::dontSendNotification);
+            juce::String text = juce::String(juce::roundToInt(ms)) + " ms";
+            if (debugLog.isActive())
+            {
+                const int xruns = debugLog.sessionXruns();
+                if (xruns > 0)
+                    text += "  xrun " + juce::String(xruns);
+            }
+            latencyLabel.setText(text, juce::dontSendNotification);
             latencyLabel.setVisible(true);
             return;
         }
@@ -774,12 +779,19 @@ void MainComponent::startDebugLog()
     DebugLog::Header header;
     header.sampleRate = processor.getSampleRate();
     header.blockSize = processor.getBlockSize();
+    header.preparedMax = processor.getPreparedMaxBlock();
+    header.selectedInput = processor.getInputChannel() + 1;
+    header.cpu = juce::SystemStats::getCpuModel();
     if (auto* device = deviceManager.getCurrentAudioDevice())
     {
         header.device = device->getName();
         header.sampleRate = device->getCurrentSampleRate();
         header.blockSize = device->getCurrentBufferSizeSamples();
+        header.activeIns = device->getActiveInputChannels().countNumberOfSetBits();
+        header.activeOuts = device->getActiveOutputChannels().countNumberOfSetBits();
     }
+    if (auto* type = deviceManager.getCurrentDeviceTypeObject())
+        header.deviceType = type->getTypeName();
     header.slug = currentSlug();
     header.patch = processor.captureDebugSnapshot();
     debugLog.start(header);
@@ -848,8 +860,8 @@ void MainComponent::applyVocalStamp(const VocalStamp& stamp)
     processor.setVocalStamp(stamp);
     writeSelectedVocalSlug();
     markDirty();
-    slugField.setColour(juce::TextEditor::backgroundColourId, CuteLookAndFeel::panel());
-    slugField.setColour(juce::TextEditor::textColourId, CuteLookAndFeel::mist());
+    slugField.setColour(juce::TextEditor::backgroundColourId, Theme::panel());
+    slugField.setColour(juce::TextEditor::textColourId, Theme::mist());
     showCurrentSlug();
 }
 
@@ -955,15 +967,15 @@ void MainComponent::applyPatch(const ToneSlug::Patch& patch)
     processor.setBinaural(patch.binaural);
     syncFieldToProcessor();
     markDirty();
-    slugField.setColour(juce::TextEditor::backgroundColourId, CuteLookAndFeel::panel());
-    slugField.setColour(juce::TextEditor::textColourId, CuteLookAndFeel::mist());
+    slugField.setColour(juce::TextEditor::backgroundColourId, Theme::panel());
+    slugField.setColour(juce::TextEditor::textColourId, Theme::mist());
     showCurrentSlug();
 }
 
 void MainComponent::flashSlugError()
 {
-    slugField.setColour(juce::TextEditor::backgroundColourId, CuteLookAndFeel::nova());
-    slugField.setColour(juce::TextEditor::textColourId, CuteLookAndFeel::onAccent());
+    slugField.setColour(juce::TextEditor::backgroundColourId, Theme::nova());
+    slugField.setColour(juce::TextEditor::textColourId, Theme::onAccent());
     slugFlashTicks = 18;
     slugField.repaint();
 }
@@ -1045,19 +1057,15 @@ bool MainComponent::keyStateChanged(bool)
 
 bool MainComponent::hitTest(int x, int y)
 {
-    juce::Path outline;
-    outline.addRoundedRectangle(getLocalBounds().toFloat(), 24.0f);
-    return outline.contains((float) x, (float) y);
+    return WindowShell::hitTest(getLocalBounds(), x, y);
 }
 
 void MainComponent::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    juce::Path outline;
-    outline.addRoundedRectangle(bounds, 24.0f);
-    g.reduceClipRegion(outline);
+    WindowShell::clip(g, bounds);
 
-    g.setColour(CuteLookAndFeel::voidFill());
+    g.setColour(Theme::voidFill());
     g.fillRect(bounds);
 
     juce::Random rng { 0xC057E11A };
@@ -1066,25 +1074,25 @@ void MainComponent::paint(juce::Graphics& g)
         const float x = rng.nextFloat() * bounds.getWidth();
         const float y = rng.nextFloat() * bounds.getHeight();
         const float a = 0.12f + rng.nextFloat() * 0.33f;
-        g.setColour(CuteLookAndFeel::starlight().withAlpha(a));
+        g.setColour(Theme::starlight().withAlpha(a));
         g.fillRect(x, y, 1.2f, 1.2f);
     }
 
     if (! meterBounds.isEmpty())
     {
-        g.setColour(CuteLookAndFeel::panel());
+        g.setColour(Theme::panel());
         g.fillRoundedRectangle(meterBounds, 4.0f);
 
         const float filled = juce::jlimit(0.0f, 1.0f, meterLevel);
         auto level = meterBounds.withWidth(meterBounds.getWidth() * filled);
-        g.setColour(meterClipped || filled > 0.9f ? CuteLookAndFeel::flare() : CuteLookAndFeel::starlight());
+        g.setColour(meterClipped || filled > 0.9f ? Theme::flare() : Theme::starlight());
         g.fillRoundedRectangle(level, 4.0f);
 
         auto pip = juce::Rectangle<float>(meterBounds.getRight() - meterBounds.getHeight(),
                                           meterBounds.getY(),
                                           meterBounds.getHeight(),
                                           meterBounds.getHeight());
-        g.setColour(meterClipped ? CuteLookAndFeel::flare() : CuteLookAndFeel::panel());
+        g.setColour(meterClipped ? Theme::flare() : Theme::panel());
         g.fillRoundedRectangle(pip, 4.0f);
     }
 }
@@ -1109,7 +1117,7 @@ void MainComponent::resized()
     bounds.removeFromTop(TitleBar::barHeight);
 
     auto meterRow = bounds.removeFromTop(16);
-    latencyLabel.setBounds(meterRow.removeFromRight(56));
+    latencyLabel.setBounds(meterRow.removeFromRight(debugLog.isActive() ? 110 : 56));
     meterBounds = meterRow.toFloat().withSizeKeepingCentre((float) meterRow.getWidth(), 10.0f);
     bounds.removeFromTop(8);
 
@@ -1182,8 +1190,8 @@ void MainComponent::timerCallback()
 
     if (slugFlashTicks > 0 && --slugFlashTicks == 0)
     {
-        slugField.setColour(juce::TextEditor::backgroundColourId, CuteLookAndFeel::panel());
-        slugField.setColour(juce::TextEditor::textColourId, CuteLookAndFeel::mist());
+        slugField.setColour(juce::TextEditor::backgroundColourId, Theme::panel());
+        slugField.setColour(juce::TextEditor::textColourId, Theme::mist());
         slugField.repaint();
     }
 
@@ -1234,18 +1242,9 @@ void MainComponent::refreshInputChannels()
 
 void MainComponent::showDeviceSettings()
 {
-    auto* selector = new juce::AudioDeviceSelectorComponent(deviceManager,
-                                                            1, 16, 1, 2,
-                                                            false, false, true, false);
+    auto selector = std::make_unique<juce::AudioDeviceSelectorComponent>(deviceManager,
+                                                                         1, 16, 1, 2,
+                                                                         false, false, true, false);
     selector->setSize(500, 420);
-    selector->setLookAndFeel(&lookAndFeel);
-
-    juce::DialogWindow::LaunchOptions options;
-    options.content.setOwned(selector);
-    options.dialogTitle = "Devices";
-    options.dialogBackgroundColour = CuteLookAndFeel::voidFill();
-    options.escapeKeyTriggersCloseButton = true;
-    options.useNativeTitleBar = true;
-    options.resizable = true;
-    options.launchAsync();
+    WindowShell::launchDialog("Devices", std::move(selector), 500, 420, true, &theme);
 }

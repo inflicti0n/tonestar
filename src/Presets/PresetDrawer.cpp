@@ -1,5 +1,5 @@
 #include "Presets/PresetDrawer.h"
-#include "Appearance/CuteLookAndFeel.h"
+#include "Appearance/Theme.h"
 
 namespace
 {
@@ -19,34 +19,34 @@ PresetDrawer::Row::Row(PresetStore& storeToUse, int indexToUse,
     editor.onTextChange = [this] { applyLiveName(); };
     editor.onReturnKey = [this] { finishEdit(); };
     editor.onFocusLost = [this] { finishEdit(); };
-    editor.setColour(juce::TextEditor::backgroundColourId, CuteLookAndFeel::voidFill());
-    editor.setColour(juce::TextEditor::textColourId, CuteLookAndFeel::mist());
+    editor.setColour(juce::TextEditor::backgroundColourId, Theme::voidFill());
+    editor.setColour(juce::TextEditor::textColourId, Theme::mist());
     addChildComponent(editor);
 }
 
 void PresetDrawer::Row::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    g.setColour(CuteLookAndFeel::panel());
-    g.fillRoundedRectangle(bounds, CuteLookAndFeel::corner());
+    g.setColour(Theme::panel());
+    g.fillRoundedRectangle(bounds, Theme::corner());
 
     if (editing)
         return;
 
-    if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+    if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
         g.setFont(laf->font(15.0f, true));
     else
         g.setFont(juce::FontOptions(15.0f, juce::Font::bold));
 
     const auto* item = store.at(index);
-    g.setColour(CuteLookAndFeel::mist());
+    g.setColour(Theme::mist());
     g.drawText(item != nullptr ? item->name : juce::String(),
                bounds.reduced(10.0f, 0.0f).withTrimmedRight(28.0f),
                juce::Justification::centredLeft, true);
 
     deleteBounds = juce::Rectangle<float>(bounds.getRight() - 26.0f, bounds.getCentreY() - 9.0f, 18.0f, 18.0f);
-    g.setColour(deleteHot ? CuteLookAndFeel::flare() : CuteLookAndFeel::dim());
-    if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+    g.setColour(deleteHot ? Theme::flare() : Theme::dim());
+    if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
         g.setFont(laf->font(14.0f, true));
     g.drawText("X", deleteBounds, juce::Justification::centred, false);
 }
@@ -111,7 +111,7 @@ void PresetDrawer::Row::startEdit()
     fallback = item->name;
     editing = true;
     editor.setText(item->name, juce::dontSendNotification);
-    if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+    if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
         editor.setFont(laf->font(15.0f, true));
     editor.setVisible(true);
     editor.grabKeyboardFocus();
@@ -168,7 +168,7 @@ void PresetDrawer::List::resized()
 
 PresetDrawer::PresetDrawer(PresetStore& storeToUse)
     : store(storeToUse),
-      plusButton(CuteLookAndFeel::panel(), CuteLookAndFeel::mist(), "+")
+      plusButton(Theme::panel(), Theme::mist(), "+")
 {
     setOpaque(false);
     plusButton.setTooltip("save current as preset");
@@ -177,7 +177,7 @@ PresetDrawer::PresetDrawer(PresetStore& storeToUse)
 
     viewport.setViewedComponent(&list, false);
     viewport.setScrollBarsShown(true, false);
-    viewport.getVerticalScrollBar().setColour(juce::ScrollBar::thumbColourId, CuteLookAndFeel::dim());
+    viewport.getVerticalScrollBar().setColour(juce::ScrollBar::thumbColourId, Theme::dim());
     viewport.getVerticalScrollBar().setColour(juce::ScrollBar::trackColourId, juce::Colours::transparentBlack);
     addAndMakeVisible(viewport);
 }
@@ -185,12 +185,12 @@ PresetDrawer::PresetDrawer(PresetStore& storeToUse)
 void PresetDrawer::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    g.setColour(CuteLookAndFeel::voidFill().interpolatedWith(CuteLookAndFeel::panel(), 0.35f));
+    g.setColour(Theme::voidFill().interpolatedWith(Theme::panel(), 0.35f));
     g.fillRoundedRectangle(bounds.reduced(8.0f, 12.0f), 12.0f);
 
-    if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+    if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
         g.setFont(laf->font(15.0f, true));
-    g.setColour(CuteLookAndFeel::dim());
+    g.setColour(Theme::dim());
     g.drawText("Presets", 48, 16, getWidth() - 60, 28, juce::Justification::centredLeft, false);
 }
 

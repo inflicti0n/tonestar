@@ -1,7 +1,7 @@
-#include "Appearance/CuteLookAndFeel.h"
+#include "Appearance/Theme.h"
 #include "BinaryData.h"
 
-CuteLookAndFeel::CuteLookAndFeel()
+Theme::Theme()
 {
     regularFace = juce::Typeface::createSystemTypefaceFor(BinaryData::GaeguRegular_ttf,
                                                           BinaryData::GaeguRegular_ttfSize);
@@ -41,7 +41,7 @@ CuteLookAndFeel::CuteLookAndFeel()
     setColour(juce::TextEditor::highlightColourId, nova());
 }
 
-juce::Font CuteLookAndFeel::font(float height, bool bold) const
+juce::Font Theme::font(float height, bool bold) const
 {
     const auto face = (bold && boldFace != nullptr) ? boldFace : regularFace;
     if (face == nullptr)
@@ -50,7 +50,7 @@ juce::Font CuteLookAndFeel::font(float height, bool bold) const
     return juce::Font(juce::FontOptions(face).withHeight(height));
 }
 
-juce::Font CuteLookAndFeel::titleFont(float height) const
+juce::Font Theme::titleFont(float height) const
 {
     if (titleFace == nullptr)
         return font(height, true);
@@ -59,7 +59,7 @@ juce::Font CuteLookAndFeel::titleFont(float height) const
         .withExtraKerningFactor(0.04f);
 }
 
-juce::Typeface::Ptr CuteLookAndFeel::getTypefaceForFont(const juce::Font& font)
+juce::Typeface::Ptr Theme::getTypefaceForFont(const juce::Font& font)
 {
     if (font.isBold() && boldFace != nullptr)
         return boldFace;

@@ -41,23 +41,21 @@ All start at 0. Three listen to the *clean* string. Five sit *after* the amp.
 
 ### Before the star (needs a clean guitar)
 
-| Pull | You want | Low → high |
+| Pull | You want | Low to high |
 | --- | --- | --- |
-| **Squeeze** | Even / sticky | Glue → sustain → squash. |
-| **Talk** | Wah / quack | Mild attack quack → full vocal sweep. |
-| **Shift** | Bigger / organ | Fat low octave → 12-string → synth stack. |
+| **Squeeze** | Even / sticky | Notes hold together, then hang, then squash into the amp. |
+| **Talk** | Wah / quack | Quack on the attack, then a bigger sweep the harder you hit. |
+| **Shift** | Bigger / organ | Fat low octave, then 12-string, then a synth stack. |
 
 ### After the star (needs the finished amp)
 
-| Pull | You want | Low → high |
+| Pull | You want | Low to high |
 | --- | --- | --- |
-| **Echo** | Slap / bounce / wash | Slapback → dotted rhythm → shoegaze wash. |
-| **Bloom** | Spring / pad | Kiss of spring → plate → cloud. |
-| **Width** | Two guitars / 80s | Slow thicken → deeper chorus. |
-| **Sweep** | Swirl / jet | Phaser → flange. |
-| **Pulse** | Chop / surf | Soft throb → hard trem chop. |
-
-> Right-click the **Bloom** label for **Shimmer**. Same handle, octave-up on the tail.
+| **Echo** | Slap / bounce / wash | Short slap, then a dotted bounce, then a long dark wash. |
+| **Bloom** | Spring / pad | Small spring, then a plate, then a long wet hall. Right-click for Shimmer. |
+| **Thicken** | Fatter / two guitars | One late copy, then a second voice, then a few cents apart. |
+| **Sweep** | Swirl / jet | Slow phaser, then a short dark flange near the top. |
+| **Pulse** | Chop / surf | Soft trem, then a hard chop. |
 
 ---
 
@@ -118,7 +116,7 @@ Clips live in `Documents/ToneStar/tape` as `track0.wav` … `track7.wav`. The WA
 | **Metronome** | Enable dry clicks |
 | **BPM** | Click to type, hold-drag, or scroll |
 | **Sparkle** | Pulses on each click |
-| **Tuner** | Toggle on the right. Dry input, A440. Shows `A2 110 Hz` and a dot vs the center line so you can tune a string. Off does not chase what you play |
+| **Tuner** | Toggle on the right. Dry input, A440, from bass / 8-string lows through a high E. Needle vs the center line. Number under the bar is `-0.12` / `+0.05`, or a lit `0` when the needle is on center. Off does not chase what you play |
 
 ## Looper
 

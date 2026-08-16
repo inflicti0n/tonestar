@@ -34,7 +34,8 @@ public:
     {
     public:
         MainWindow(juce::String name, bool selfTest)
-            : DocumentWindow(name, CuteLookAndFeel::voidFill(), 0)
+            : DocumentWindow(name, Theme::voidFill(),
+                             DocumentWindow::minimiseButton | DocumentWindow::closeButton)
         {
             AppLog::note("window ctor");
             setUsingNativeTitleBar(false);

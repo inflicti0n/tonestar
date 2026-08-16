@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Appearance/CuteLookAndFeel.h"
+#include "Appearance/Theme.h"
 
 #include <cmath>
 #include <functional>
@@ -19,10 +19,10 @@ public:
     void paint(juce::Graphics& g) override
     {
         const auto disc = discBounds();
-        g.setColour(CuteLookAndFeel::panel());
+        g.setColour(Theme::panel());
         g.fillEllipse(disc);
-        g.setColour(CuteLookAndFeel::starlight());
-        if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+        g.setColour(Theme::starlight());
+        if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
             g.setFont(laf->font(14.0f, true));
         else
             g.setFont(juce::FontOptions(14.0f, juce::Font::bold));
@@ -173,7 +173,7 @@ private:
             tri.addTriangle(mid, r.getBottom() - 2.0f,
                             r.getX() + 2.0f, r.getY() + 2.0f,
                             r.getRight() - 2.0f, r.getY() + 2.0f);
-        g.setColour(lit ? CuteLookAndFeel::starlight() : CuteLookAndFeel::mist());
+        g.setColour(lit ? Theme::starlight() : Theme::mist());
         g.fillPath(tri);
     }
 

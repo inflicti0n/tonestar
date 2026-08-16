@@ -68,19 +68,17 @@ The eight handles around the star are how much of that land. All start at zero. 
 
 **Before the amp** (listens to the clean string):
 
-- **Squeeze**: glue to sustain to squash
-- **Talk**: mild attack quack to a full vocal sweep
-- **Shift**: fat low octave to 12-string to synth stack
+- **Squeeze.** The pick gets even. A little pull holds the notes together. Further in they hang longer. All the way up it really squashes into the amp.
+- **Talk.** Wah that follows your pick. A little is a quack on the attack. Pull it and it sweeps more the harder you hit.
+- **Shift.** The guitar gets bigger. First a fat low octave under the string. Then it sounds like a 12-string. At the top it is a thick synth stack.
 
 **After the amp** (sits on the finished tone):
 
-- **Echo**: slapback to dotted rhythm to shoegaze wash
-- **Bloom**: kiss of spring to plate to cloud
-- **Width**: slow thicken to a deeper chorus
-- **Sweep**: phaser to flange
-- **Pulse**: soft throb to a hard trem chop
-
-Right-click the **Bloom** label for **Shimmer**. Same handle, octave-up on the tail.
+- **Echo.** A little is a short slap repeat. Mid is a dotted bounce. All the way is a long dark wash.
+- **Bloom.** Reverb behind the amp. A little sounds like a small spring. Mid sounds like a plate. All the way is a long wet hall. Right-click the label for Shimmer, same handle with an octave on the tail.
+- **Thicken.** Feels like two guitars. A little is one late copy. Past a quarter pull a second voice comes in. At the top they sit a few cents apart.
+- **Sweep.** A little is a slow phaser. Near the top it turns into a short dark flange.
+- **Pulse.** The volume goes up and down. A little is a soft trem. Past the middle it chops hard.
 
 ---
 
@@ -169,7 +167,7 @@ The click and BPM sit on the left of the tape footer. Turn the metronome on for 
 
 ### Tuner
 
-The right half of the same footer. Toggle it on. It reads the dry input, A440, and shows the note, octave, and Hertz (`A2 110 Hz`). The bar is ±50 cents. A center line is in tune. The dot slides with you.
+The right half of the same footer. Toggle it on. It reads the dry input, A440, from a bass or 8-string low up through a high E. Shows the note, octave, and Hertz (`A2 110 Hz`). The bar is ±50 cents with tick marks. A center line is in tune. The needle is a vertical line. The number under the bar is how far in semitones (`-0.12`, `+0.05`). It only reads `0` and lights up when the needle is on center. Left means go up. Right means go down.
 
 Off does not chase what you play. The setting sticks the next time you open the app.
 
@@ -287,4 +285,6 @@ That writes `dist/ToneStar-mac-arm64.zip`. JUCE 8.0.15 is fetched at configure t
 
 ## Licence
 
-Copyright 2026 ToneStar authors. GNU AGPLv3. See [`LICENSE`](LICENSE) and [`licenses/THIRD_PARTY.md`](licenses/THIRD_PARTY.md) for JUCE, Steinberg ASIO, SIL OFL fonts, SADIE Apache 2.0 HRTF, and the CC0 cab IR. Official Windows builds may be sold as convenience; anyone can compile the same source.
+Copyright 2026 ToneStar authors. ToneStar is licensed under AGPLv3. See [`LICENSE`](LICENSE). Third-party components and assets remain under their respective licenses; see [`licenses/THIRD_PARTY.md`](licenses/THIRD_PARTY.md).
+
+Official builds may be sold as a convenience. The source is available under AGPLv3, and anyone may build and redistribute their own compliant version.

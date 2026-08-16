@@ -90,7 +90,7 @@ private:
     LooperEngine* engine = nullptr;
     PhraseStrip stripA { 0 };
     PhraseStrip stripB { 1 };
-    CircleToggle quantizeButton { "Quantize", CuteLookAndFeel::nova(), CircleIcon::Quantize };
+    CircleToggle quantizeButton { "Quantize", Theme::nova(), CircleIcon::Quantize };
     bool advancedMode = false;
     bool quantizeOn = false;
     juce::Rectangle<int> titleBounds;

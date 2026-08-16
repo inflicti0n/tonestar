@@ -1,5 +1,5 @@
 #include "Looper/LooperDrawer.h"
-#include "Appearance/CuteLookAndFeel.h"
+#include "Appearance/Theme.h"
 
 namespace
 {
@@ -36,14 +36,14 @@ juce::Colour LooperDrawer::PhraseStrip::statusColour() const
     switch (state)
     {
         case LooperEngine::State::Armed:
-            return CuteLookAndFeel::flare().interpolatedWith(CuteLookAndFeel::panel(), 0.42f);
-        case LooperEngine::State::Recording:   return CuteLookAndFeel::flare();
-        case LooperEngine::State::Playing:     return CuteLookAndFeel::starlight();
-        case LooperEngine::State::Overdubbing: return CuteLookAndFeel::nova();
-        case LooperEngine::State::Stopped:     return CuteLookAndFeel::mist();
-        case LooperEngine::State::Empty:       return CuteLookAndFeel::dim();
+            return Theme::flare().interpolatedWith(Theme::panel(), 0.42f);
+        case LooperEngine::State::Recording:   return Theme::flare();
+        case LooperEngine::State::Playing:     return Theme::starlight();
+        case LooperEngine::State::Overdubbing: return Theme::nova();
+        case LooperEngine::State::Stopped:     return Theme::mist();
+        case LooperEngine::State::Empty:       return Theme::dim();
     }
-    return CuteLookAndFeel::dim();
+    return Theme::dim();
 }
 
 void LooperDrawer::PhraseStrip::paint(juce::Graphics& g)
@@ -51,17 +51,17 @@ void LooperDrawer::PhraseStrip::paint(juce::Graphics& g)
     auto bounds = getLocalBounds().toFloat();
     if (advancedLook)
     {
-        auto fill = armed ? CuteLookAndFeel::panel().interpolatedWith(CuteLookAndFeel::nova(), 0.12f)
-                          : CuteLookAndFeel::panel();
+        auto fill = armed ? Theme::panel().interpolatedWith(Theme::nova(), 0.12f)
+                          : Theme::panel();
         g.setColour(fill);
-        g.fillRoundedRectangle(bounds, CuteLookAndFeel::corner());
+        g.fillRoundedRectangle(bounds, Theme::corner());
     }
 
     if (advancedLook)
     {
-        if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+        if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
             g.setFont(laf->font(16.0f, true));
-        g.setColour(armed ? CuteLookAndFeel::starlight() : CuteLookAndFeel::dim());
+        g.setColour(armed ? Theme::starlight() : Theme::dim());
         g.drawText(juce::String(index + 1), bounds.removeFromLeft(28.0f),
                    juce::Justification::centred, false);
     }
@@ -71,7 +71,7 @@ void LooperDrawer::PhraseStrip::paint(juce::Graphics& g)
     const auto ringArea = recBounds.withSizeKeepingCentre(ring, ring);
     const auto disc = ringArea.reduced(ring * 0.22f);
 
-    g.setColour(CuteLookAndFeel::panel());
+    g.setColour(Theme::panel());
     g.fillEllipse(ringArea);
 
     if (state != LooperEngine::State::Empty || playhead > 0.0f)
@@ -91,15 +91,15 @@ void LooperDrawer::PhraseStrip::paint(juce::Graphics& g)
 
     if (advancedLook)
     {
-        g.setColour(hasContent ? CuteLookAndFeel::mist() : CuteLookAndFeel::dim());
+        g.setColour(hasContent ? Theme::mist() : Theme::dim());
         g.fillRoundedRectangle(stopBounds.reduced(stopBounds.getWidth() * 0.28f), 2.0f);
     }
 
-    g.setColour(CuteLookAndFeel::panel());
+    g.setColour(Theme::panel());
     g.fillRoundedRectangle(levelBounds, 5.0f);
     const float amount = juce::jlimit(0.0f, 1.0f, level);
     auto filled = levelBounds.withTrimmedTop(levelBounds.getHeight() * (1.0f - amount));
-    g.setColour(CuteLookAndFeel::starlight());
+    g.setColour(Theme::starlight());
     g.fillRoundedRectangle(filled, 5.0f);
     g.fillEllipse(thumbBounds());
 }
@@ -321,12 +321,12 @@ void LooperDrawer::setAdvanced(bool shouldBeAdvanced, bool notify)
 void LooperDrawer::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
-    g.setColour(CuteLookAndFeel::voidFill().interpolatedWith(CuteLookAndFeel::panel(), 0.35f));
+    g.setColour(Theme::voidFill().interpolatedWith(Theme::panel(), 0.35f));
     g.fillRoundedRectangle(bounds.reduced(8.0f, 8.0f), 12.0f);
 
-    if (auto* laf = dynamic_cast<CuteLookAndFeel*>(&getLookAndFeel()))
+    if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
         g.setFont(laf->font(15.0f, true));
-    g.setColour(CuteLookAndFeel::dim());
+    g.setColour(Theme::dim());
     g.drawText("Looper", titleBounds.toFloat(), juce::Justification::centredLeft, false);
 }
 

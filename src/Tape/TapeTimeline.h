@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Appearance/CuteLookAndFeel.h"
+#include "Appearance/Theme.h"
 #include <cmath>
 
 struct TapeTimeline
@@ -122,9 +122,9 @@ struct TapeTimeline
 
             const bool bar = (b % 4) == 0;
             if (bar)
-                g.setColour(CuteLookAndFeel::starlight().withAlpha(0.32f));
+                g.setColour(Theme::starlight().withAlpha(0.32f));
             else if (showQuarters())
-                g.setColour(CuteLookAndFeel::mist().withAlpha(0.16f));
+                g.setColour(Theme::mist().withAlpha(0.16f));
             else
                 continue;
 
@@ -134,7 +134,7 @@ struct TapeTimeline
         if (! showEighths())
             return;
 
-        g.setColour(CuteLookAndFeel::mist().withAlpha(0.10f));
+        g.setColour(Theme::mist().withAlpha(0.10f));
         for (int b = first; b <= last; ++b)
         {
             if (b < 0)

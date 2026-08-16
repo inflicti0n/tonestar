@@ -463,13 +463,13 @@ void ToneField::paint(juce::Graphics& g)
     if (zeroR < 4.0f)
         return;
 
-    g.setColour(CuteLookAndFeel::rose().withAlpha(0.28f));
+    g.setColour(Theme::rose().withAlpha(0.28f));
     g.drawEllipse(c.x - zeroR, c.y - zeroR, zeroR * 2.0f, zeroR * 2.0f, 1.5f);
 
-    g.setColour(CuteLookAndFeel::peach().withAlpha(0.22f));
+    g.setColour(Theme::peach().withAlpha(0.22f));
     g.drawEllipse(c.x - fullR, c.y - fullR, fullR * 2.0f, fullR * 2.0f, 1.0f);
 
-    g.setColour(CuteLookAndFeel::peach().withAlpha(0.35f));
+    g.setColour(Theme::peach().withAlpha(0.35f));
     for (int i = 0; i < fxCount; ++i)
         g.drawLine({ fxSpoke(i, 0.0f), fxSpoke(i, 1.0f) }, 1.0f);
 }
@@ -486,16 +486,16 @@ void ToneField::paintOverChildren(juce::Graphics& g)
         const bool active = (i == dragFx || i == hoverFx);
         const auto p = fxSpoke(i, fxDisplay[(size_t) i]);
         const float r = active ? 6.2f : 5.0f;
-        g.setColour(CuteLookAndFeel::card());
+        g.setColour(Theme::card());
         g.fillEllipse(p.x - r, p.y - r, r * 2.0f, r * 2.0f);
-        g.setColour(active ? CuteLookAndFeel::rose() : CuteLookAndFeel::peach());
+        g.setColour(active ? Theme::rose() : Theme::peach());
         g.drawEllipse(p.x - r, p.y - r, r * 2.0f, r * 2.0f, active ? 2.0f : 1.5f);
 
         const auto label = fxLabelBounds(i);
         const juce::String name = mode == RigMode::Vocals
                                       ? juce::String(vocalFxName(i))
                                       : ((i == FxRack::Bloom) ? bloomLabel() : juce::String(FxRack::jobName(i)));
-        g.setColour(active ? CuteLookAndFeel::rose() : CuteLookAndFeel::mutedInk());
+        g.setColour(active ? Theme::rose() : Theme::mutedInk());
         g.setFont(juce::FontOptions(13.0f, juce::Font::bold));
         g.drawText(name, label, juce::Justification::centred, false);
     }

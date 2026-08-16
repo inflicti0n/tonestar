@@ -4,7 +4,7 @@
 #include "App/AppSettings.h"
 #include "App/RigMode.h"
 #include "Cab/CabWidget.h"
-#include "Appearance/CuteLookAndFeel.h"
+#include "Appearance/Theme.h"
 #include "App/GuitarProcessor.h"
 #include "Looper/LooperDrawer.h"
 #include "Visuals/PlasmaTune.h"
@@ -71,7 +71,7 @@ private:
     int windowWidth() const;
     int windowHeight() const;
 
-    CuteLookAndFeel lookAndFeel;
+    Theme theme;
     TitleBar titleBar;
     juce::AudioDeviceManager deviceManager;
     juce::AudioProcessorPlayer player;
@@ -93,10 +93,10 @@ private:
     juce::Slider outputGain;
     juce::Label inputGainLabel { {}, "In" };
     juce::Label outputGainLabel { {}, "Out" };
-    CircleToggle muteButton { "Mute", CuteLookAndFeel::flare(), CircleIcon::Mute };
-    CircleToggle binauralButton { "Binaural", CuteLookAndFeel::nova(), CircleIcon::Binaural };
-    CircleToggle debugButton { "Debug", CuteLookAndFeel::starlight(), CircleIcon::Debug };
-    CircleToggle logsButton { "Open logs folder", CuteLookAndFeel::starlight(), CircleIcon::Folder };
+    CircleToggle muteButton { "Mute", Theme::flare(), CircleIcon::Mute };
+    CircleToggle binauralButton { "Binaural", Theme::nova(), CircleIcon::Binaural };
+    CircleToggle debugButton { "Debug", Theme::starlight(), CircleIcon::Debug };
+    CircleToggle logsButton { "Open logs folder", Theme::starlight(), CircleIcon::Folder };
     juce::TextButton devicesButton { "Devices" };
     juce::TextButton copyButton { "Copy" };
     juce::TextButton applyButton { "Apply" };

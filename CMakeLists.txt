@@ -74,8 +74,9 @@ target_sources(ToneStar PRIVATE
     src/Visuals/PlasmaTune.cpp
     src/Visuals/PlasmaTune.h
     src/Appearance/TitleBar.h
-    src/Appearance/CuteLookAndFeel.cpp
-    src/Appearance/CuteLookAndFeel.h
+    src/Appearance/WindowShell.h
+    src/Appearance/Theme.cpp
+    src/Appearance/Theme.h
     src/Vocals/VocalCompose.h
     src/Vocals/VocalEngine.h
     src/Vocals/VocalFx.h

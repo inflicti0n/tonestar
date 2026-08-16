@@ -1,6 +1,6 @@
 #include "Visuals/PlasmaTune.h"
 #include "App/AppLog.h"
-#include "Appearance/CuteLookAndFeel.h"
+#include "Appearance/Theme.h"
 #include <juce_gui_extra/juce_gui_extra.h>
 
 namespace
@@ -53,7 +53,7 @@ void PlasmaTune::Swatch::setColour(juce::Colour c)
 void PlasmaTune::Swatch::paint(juce::Graphics& g)
 {
     auto r = getLocalBounds().toFloat().reduced(1.0f);
-    g.setColour(CuteLookAndFeel::panel());
+    g.setColour(Theme::panel());
     g.fillRoundedRectangle(r, 6.0f);
 
     auto inner = r.reduced(3.0f);
@@ -73,7 +73,7 @@ void PlasmaTune::Swatch::paint(juce::Graphics& g)
     g.fillRect(inner);
     g.restoreState();
 
-    g.setColour(CuteLookAndFeel::mist().withAlpha(0.35f));
+    g.setColour(Theme::mist().withAlpha(0.35f));
     g.drawRoundedRectangle(r, 6.0f, 1.0f);
 }
 
@@ -115,9 +115,9 @@ PlasmaTune::PlasmaTune()
     addAndMakeVisible(copyButton);
 
     fluidHead.setJustificationType(juce::Justification::centredLeft);
-    fluidHead.setColour(juce::Label::textColourId, CuteLookAndFeel::dim());
+    fluidHead.setColour(juce::Label::textColourId, Theme::dim());
     ringHead.setJustificationType(juce::Justification::centredLeft);
-    ringHead.setColour(juce::Label::textColourId, CuteLookAndFeel::dim());
+    ringHead.setColour(juce::Label::textColourId, Theme::dim());
     content.addAndMakeVisible(fluidHead);
     content.addAndMakeVisible(ringHead);
 
@@ -212,8 +212,8 @@ void PlasmaTune::push()
 
 void PlasmaTune::paint(juce::Graphics& g)
 {
-    g.fillAll(CuteLookAndFeel::voidFill());
-    g.setColour(CuteLookAndFeel::panel());
+    g.fillAll(Theme::voidFill());
+    g.setColour(Theme::panel());
     g.fillRoundedRectangle(getLocalBounds().toFloat().reduced(6.0f), 10.0f);
 }
 
