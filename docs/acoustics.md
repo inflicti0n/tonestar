@@ -15,9 +15,9 @@ The star still answers "what amp am I standing in." FX answers "what is happenin
 
 One measured 12-inch cone, then Size and Back as recipes around it.
 
-The cone is a trimmed (~32 ms) mono fold of Jester Dyne Brutal **Cookie Monster**: Celestion Vintage 30 + Shure SM57, 48 kHz, CC0. Convolution is a starting colour, mixed under the physical filters so a combo default does not sound like a miked 4×12 wall.
+The cone is a trimmed (~32 ms) mono fold of Jester Dyne Brutal **Cookie Monster**: Celestion Vintage 30 + Shure SM57, 48 kHz, CC0. Mix is 0.72 at Combo and 0.80 at Stack. Size and Back filters do the rest of the box. The Brutal pack is all one oversized 4×12, so there is no honest Combo or Stack IR to add.
 
-**Size** 0 → 1 lands Combo (1×12) / Twin (2×12) / Stack (4×12). More low-mid coupling, slightly darker breakup, more beaming (narrower highs). Not a speaker-count knob.
+**Size** 0 → 1 lands Combo (1×12) / Twin (2×12) / Stack (4×12). More low-mid coupling, darker breakup, more beaming (narrower highs). Not a speaker-count knob.
 
 **Back** 0 → 1 lands Open / Closed. Closed: less rear-leak highs, stronger lows, more directional.
 
