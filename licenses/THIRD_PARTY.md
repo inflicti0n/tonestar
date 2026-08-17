@@ -59,5 +59,14 @@ The following works are included or linked. Their licenses still apply.
   Celestion and Shure names describe the measured hardware. They are not
   endorsements.
 
+## Discord Rich Presence
+
+- ToneStar speaks Discord's public local RPC (named pipe / UNIX socket
+  `discord-ipc-0` … `9`) to set Rich Presence. No Discord SDK or binary
+  is bundled.
+- Protocol: https://discord.com/developers/docs/rich-presence/how-to
+- Discord is a trademark of Discord Inc. This is not an official Discord
+  product and does not imply endorsement.
+
 ToneStar is licensed under the GNU Affero General Public License v3.0
 (see [`LICENSE`](../LICENSE)). Copyright 2026 ToneStar authors.

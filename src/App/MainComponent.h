@@ -2,6 +2,7 @@
 
 #include "Tape/AdvancedDrawer.h"
 #include "App/AppSettings.h"
+#include "App/DiscordPresence.h"
 #include "App/RigMode.h"
 #include "Cab/CabWidget.h"
 #include "Appearance/Theme.h"
@@ -68,6 +69,7 @@ private:
     void releaseSpacePedal();
     void togglePlasmaTune();
     void runSelfTest();
+    void refreshDiscordPresence(bool immediate);
     int windowWidth() const;
     int windowHeight() const;
 
@@ -119,6 +121,7 @@ private:
     bool selfTesting = false;
     bool audioStartedOk = false;
     DebugLog debugLog;
+    DiscordPresence discordPresence;
     std::array<float, 6> guitarAxes {};
     std::array<float, 8> guitarFx {};
     bool guitarShimmer = false;

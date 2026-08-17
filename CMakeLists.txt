@@ -37,6 +37,8 @@ target_sources(ToneStar PRIVATE
     src/App/AppLog.cpp
     src/App/AppLog.h
     src/App/AppSettings.h
+    src/App/DiscordPresence.cpp
+    src/App/DiscordPresence.h
     src/App/DebugLog.h
     src/App/RigMode.h
     src/Amp/ToneCompose.h
@@ -108,6 +110,7 @@ target_compile_definitions(ToneStar PRIVATE
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:ToneStar,JUCE_PRODUCT_NAME>"
     JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:ToneStar,JUCE_VERSION>"
+    TONESTAR_DISCORD_APP_ID="1538926105107628102"
 )
 
 target_link_libraries(ToneStar PRIVATE

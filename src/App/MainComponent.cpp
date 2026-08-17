@@ -67,6 +67,7 @@ MainComponent::MainComponent()
         processor.setCabSize(cab.getSizeAmount());
         processor.setCabBack(cab.getBackAmount());
         showCurrentSlug();
+        refreshDiscordPresence(false);
         markDirty();
     };
     addAndMakeVisible(cab);
@@ -78,6 +79,7 @@ MainComponent::MainComponent()
         processor.setVocalStamp(currentVocalStamp());
         writeSelectedVocalSlug();
         showCurrentSlug();
+        refreshDiscordPresence(false);
         markDirty();
     };
     addAndMakeVisible(vocalKey);
@@ -211,6 +213,7 @@ MainComponent::MainComponent()
         syncFieldToProcessor();
         writeSelectedVocalSlug();
         showCurrentSlug();
+        refreshDiscordPresence(false);
         markDirty();
     };
     addAndMakeVisible(field);
@@ -251,6 +254,8 @@ MainComponent::MainComponent()
 
     loadSettings();
     AppLog::note("settings loaded");
+    discordPresence.start();
+    refreshDiscordPresence(true);
     setSize(520, 920);
     applyWindowSize();
     titleBar.toFront(false);
@@ -339,6 +344,7 @@ void MainComponent::startAudio()
 MainComponent::~MainComponent()
 {
     stopTimer();
+    discordPresence.clear();
     stopDebugLog();
     plasmaTune.setLookAndFeel(nullptr);
     processor.stopRecording();
@@ -912,8 +918,23 @@ void MainComponent::applyRigMode(RigMode next, bool fromUser)
     applyWindowSize();
     resized();
     showCurrentSlug();
+    refreshDiscordPresence(true);
     if (fromUser)
         markDirty();
+}
+
+void MainComponent::refreshDiscordPresence(bool immediate)
+{
+    DiscordPresence::Snapshot snap;
+    snap.mode = titleBar.getMode();
+    snap.axes = field.getStarValues();
+    snap.axisCount = field.getAxisCount();
+    snap.fx = field.getFxValues();
+    snap.fxCount = field.getFxCount();
+    snap.shimmer = field.getBloomShimmer();
+    snap.keyLabel = vocalKey.label();
+    snap.recording = processor.isRecording();
+    discordPresence.refresh(snap, immediate);
 }
 
 void MainComponent::writeSelectedVocalSlug()
@@ -1201,6 +1222,8 @@ void MainComponent::timerCallback()
     advanced.consumePulse(processor.takeMetroPulse());
     advanced.setTunerReading(processor.getTunerReading(), processor.isTunerArmed());
     const bool recNow = processor.isRecording();
+    if (recNow != wasTapeRecording)
+        refreshDiscordPresence(false);
     if (wasTapeRecording && ! recNow && titleBar.getMode() == RigMode::Vocals)
     {
         const int lane = processor.getTape().getRecLane();
@@ -1215,6 +1238,7 @@ void MainComponent::timerCallback()
         releaseSpacePedal();
     if (looperDrawer.isVisible())
         looperDrawer.refresh();
+    discordPresence.tick();
 }
 
 void MainComponent::changeListenerCallback(juce::ChangeBroadcaster*)
