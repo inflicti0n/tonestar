@@ -7,23 +7,33 @@ on:
       - "v*"
 
 jobs:
-  mac-arm64:
+  mac:
     runs-on: macos-14
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Build
-        run: bash scripts/build-mac.sh
+        run: CMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} bash scripts/build-mac.sh
+
+      - name: Check arch
+        run: |
+          app="build-mac/ToneStar_artefacts/Release/ToneStar.app"
+          got="$(lipo -archs "$app/Contents/MacOS/ToneStar")"
+          echo "lipo: $got"
+          [[ "$got" == "${{ matrix.arch }}" ]]
 
       - name: Upload zip
         uses: actions/upload-artifact@v4
         with:
-          name: ToneStar-mac-arm64
-          path: dist/ToneStar-mac-arm64.zip
+          name: ToneStar-mac-${{ matrix.arch }}
+          path: dist/ToneStar-mac-${{ matrix.arch }}.zip
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/ToneStar-mac-arm64.zip
+          files: dist/ToneStar-mac-${{ matrix.arch }}.zip

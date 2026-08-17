@@ -248,9 +248,10 @@ Turn **Debug** on, play a bit, then click the folder button next to it. Send tha
 
 ## Mac
 
-Apple Silicon only, unsigned. GitHub, **Actions**, **Mac**, **Run workflow**. Download `ToneStar-mac-arm64.zip`, unzip, right-click **ToneStar**, **Open**.
+Unsigned, not notarized. macOS 11 or later. GitHub, **Actions**, **Mac**, **Run workflow**. Unzip, right-click **ToneStar**, **Open**.
 
-Not notarized. Intel Macs are not built.
+- Apple Silicon: `ToneStar-mac-arm64.zip`
+- Intel 2017 and later: `ToneStar-mac-x86_64.zip` (2017 last official OS is Ventura)
 
 ---
 
@@ -281,7 +282,13 @@ On a Mac:
 bash scripts/build-mac.sh
 ```
 
-That writes `dist/ToneStar-mac-arm64.zip`. JUCE 8.0.15 is fetched at configure time.
+That writes `dist/ToneStar-mac-arm64.zip`. For Intel:
+
+```bash
+CMAKE_OSX_ARCHITECTURES=x86_64 bash scripts/build-mac.sh
+```
+
+Use a separate `BUILD_DIR` if you build both on one machine. JUCE 8.0.15 is fetched at configure time. Both zips need macOS 11 or later.
 
 ## Licence
 
