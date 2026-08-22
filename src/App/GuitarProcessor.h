@@ -64,7 +64,7 @@ public:
     void setVocalStamp(const VocalStamp& stamp);
     VocalStamp getVocalStamp() const;
     void setListenLane(int lane);
-    void renderVocal(juce::AudioBuffer<float>& mono, const VocalStamp& stamp, float bpm);
+    void renderVocal(juce::AudioBuffer<float>& stereo, const VocalStamp& stamp, float bpm);
     void setCabSize(float value) { acoustics.setCabSize(value); }
     void setCabBack(float value) { acoustics.setCabBack(value); }
     void setBinaural(bool shouldUse) { acoustics.setBinaural(shouldUse); }

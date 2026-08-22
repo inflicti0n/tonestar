@@ -129,9 +129,9 @@ VocalStamp GuitarProcessor::getVocalStamp() const
     return stamp;
 }
 
-void GuitarProcessor::renderVocal(juce::AudioBuffer<float>& mono, const VocalStamp& stamp, float bpm)
+void GuitarProcessor::renderVocal(juce::AudioBuffer<float>& stereo, const VocalStamp& stamp, float bpm)
 {
-    exportVocal.process(mono, stamp, bpm);
+    exportVocal.process(stereo, stamp, bpm);
 }
 
 FieldEnergy GuitarProcessor::getFieldEnergy() const
@@ -154,7 +154,7 @@ void GuitarProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     monoBuffer.setSize(1, preparedMaxBlock);
     stereoBuffer.setSize(2, preparedMaxBlock);
     dryTap.setSize(1, preparedMaxBlock);
-    vocalScratch.setSize(1, preparedMaxBlock);
+    vocalScratch.setSize(2, preparedMaxBlock);
 
     currentSampleRate = sampleRate;
     clickLength = juce::jmax(32, (int) std::round(sampleRate * 0.008));
@@ -233,6 +233,14 @@ DebugLog::Snapshot GuitarProcessor::captureDebugSnapshot() const
     snap.shimmer = getBloomShimmer();
     snap.binaural = getBinaural();
     snap.muted = isMuted();
+    snap.vocals = getRigMode() == RigMode::Vocals;
+    if (snap.vocals)
+    {
+        const auto stamp = getVocalStamp();
+        snap.vocalFx = stamp.fx;
+        snap.vocalRoot = stamp.root;
+        snap.vocalMinor = stamp.minor;
+    }
     return snap;
 }
 
@@ -251,7 +259,7 @@ void GuitarProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     monoBuffer.setSize(1, numSamples, false, false, true);
     stereoBuffer.setSize(2, numSamples, false, false, true);
     dryTap.setSize(1, numSamples, false, false, true);
-    vocalScratch.setSize(1, numSamples, false, false, true);
+    vocalScratch.setSize(2, numSamples, false, false, true);
 
     const int inCh = juce::jlimit(0, numIns - 1, inputChannel.load(std::memory_order_relaxed));
     const float inGain = juce::Decibels::decibelsToGain(inputGainDb.load(std::memory_order_relaxed));
@@ -277,19 +285,34 @@ void GuitarProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     if (vocals)
     {
-        liveVocal.process(monoBuffer, getVocalStamp(), (float) bpm);
+        stereoBuffer.clear();
+        stereoBuffer.copyFrom(0, 0, monoBuffer, 0, 0, numSamples);
+        liveVocal.process(stereoBuffer, getVocalStamp(), (float) bpm);
+        const auto vocal = liveVocal.takeDebug();
         if (log != nullptr)
         {
-            peaks[1] = monoBuffer.getMagnitude(0, 0, numSamples);
-            rms[1] = monoBuffer.getRMSLevel(0, 0, numSamples);
+            peaks[1] = juce::jmax(stereoBuffer.getMagnitude(0, 0, numSamples),
+                                  stereoBuffer.getMagnitude(1, 0, numSamples));
+            rms[1] = 0.5f * (stereoBuffer.getRMSLevel(0, 0, numSamples)
+                             + stereoBuffer.getRMSLevel(1, 0, numSamples));
             peaks[2] = peaks[1];
             rms[2] = rms[1];
             peaks[3] = peaks[1];
             rms[3] = rms[1];
+            DebugLog::VocalTrace trace;
+            trace.dblWraps = vocal.dblWraps;
+            trace.stackWraps = vocal.stackWraps;
+            trace.harmWraps = vocal.harmWraps;
+            trace.harmStarts = vocal.harmStarts;
+            trace.harmBlocked = vocal.harmBlocked;
+            trace.tuneResets = vocal.tuneResets;
+            trace.hzJumps = vocal.hzJumps;
+            trace.lockLost = vocal.lockLost;
+            trace.lockGained = vocal.lockGained;
+            trace.hz = vocal.hz;
+            trace.locked = vocal.locked;
+            log->noteVocal(trace);
         }
-
-        stereoBuffer.copyFrom(0, 0, monoBuffer, 0, 0, numSamples);
-        stereoBuffer.copyFrom(1, 0, monoBuffer, 0, 0, numSamples);
     }
     else
     {
@@ -348,7 +371,8 @@ void GuitarProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
         const bool followLive = vocals && (listen < 0 || listen == i);
         const VocalStamp stamp = followLive ? live : tape.getVocalStamp(i);
-        vocalScratch.copyFrom(0, 0, dry, numSamples);
+        vocalScratch.clear();
+        vocalScratch.copyFrom(0, 0, dry, 0, numSamples);
         vocalScratch.applyGain(inGain);
         laneVocals[(size_t) i].process(vocalScratch, stamp, (float) bpm);
         vocalScratch.applyGain(outGain);
@@ -358,7 +382,7 @@ void GuitarProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         const float gL = gain * std::cos(angle);
         const float gR = gain * std::sin(angle);
         stereoBuffer.addFrom(0, 0, vocalScratch, 0, 0, numSamples, gL);
-        stereoBuffer.addFrom(1, 0, vocalScratch, 0, 0, numSamples, gR);
+        stereoBuffer.addFrom(1, 0, vocalScratch, 1, 0, numSamples, gR);
     }
 
     looper.process(stereoBuffer, numSamples, metroSample, samplesPerBeat);

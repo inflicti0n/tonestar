@@ -67,12 +67,12 @@ inline const char* vocalFxName(int index)
 inline const char* vocalFxTip(int index)
 {
     static constexpr const char* tips[] = {
-        "polish to hard tune",
-        "fatten to a wide stack",
-        "slap to a throw",
-        "room to hall",
-        "third to a small choir",
-        "lo-fi to telephone"
+        "nudges you toward the key. low is a light pull, high snaps harder",
+        "a second singer next to you, a little late and off",
+        "repeats in time with the click. short slap first, longer throws later",
+        "puts a room around the vocal. small space first, bigger hall as you go",
+        "thickens the vocal. wide doubles first, then low and high harmonies",
+        "boxes the vocal in. a little thin at first, then full telephone"
     };
     return tips[juce::jlimit(0, 5, index)];
 }

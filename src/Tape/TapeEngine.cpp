@@ -417,7 +417,7 @@ bool TapeEngine::exportMix(const juce::File& dest, double startSeconds, double l
     juce::AudioBuffer<float> mix(2, frames);
     mix.clear();
     const int block = 128;
-    juce::AudioBuffer<float> dry(1, block);
+    juce::AudioBuffer<float> dry(2, block);
     const float bpm = lastBpm.load(std::memory_order_relaxed);
     for (int done = 0; done < frames; )
     {
@@ -449,7 +449,7 @@ bool TapeEngine::exportMix(const juce::File& dest, double startSeconds, double l
                     || lane.mute.load(std::memory_order_relaxed) != 0)
                     continue;
 
-                dry.setSize(1, n, false, false, true);
+                dry.setSize(2, n, false, false, true);
                 dry.clear();
                 auto* d = dry.getWritePointer(0);
                 bool any = false;
@@ -471,11 +471,12 @@ bool TapeEngine::exportMix(const juce::File& dest, double startSeconds, double l
                                     * (juce::MathConstants<float>::halfPi * 0.5f);
                 const float gL = gain * std::cos(angle);
                 const float gR = gain * std::sin(angle);
-                const auto* wet = dry.getReadPointer(0);
+                const auto* wetL = dry.getReadPointer(0);
+                const auto* wetR = dry.getReadPointer(1);
                 for (int s = 0; s < n; ++s)
                 {
-                    left[s] += wet[s] * gL;
-                    right[s] += wet[s] * gR;
+                    left[s] += wetL[s] * gL;
+                    right[s] += wetR[s] * gR;
                 }
             }
         }

@@ -18,11 +18,21 @@ public:
         fx.reset();
     }
 
-    void process(juce::AudioBuffer<float>& mono, const VocalStamp& stamp, float bpm)
+    void process(juce::AudioBuffer<float>& stereo, const VocalStamp& stamp, float bpm)
     {
+        const int n = stereo.getNumSamples();
+        if (n <= 0)
+            return;
+
+        if (stereo.getNumChannels() < 2)
+            stereo.setSize(2, n, true, false, true);
+
+        juce::AudioBuffer<float> mono (stereo.getArrayOfWritePointers(), 1, n);
         engine.process(mono, composeVocal(stamp.axes));
-        fx.process(mono, stamp.fx, stamp.root, stamp.minor, bpm);
+        fx.process(stereo, stamp.fx, stamp.root, stamp.minor, bpm);
     }
+
+    VocalDebug takeDebug() { return fx.takeDebug(); }
 
 private:
     VocalEngine engine;
