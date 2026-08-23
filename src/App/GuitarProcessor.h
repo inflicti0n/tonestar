@@ -145,6 +145,9 @@ private:
     std::array<std::atomic<float>, 6> vocalFx {};
     std::atomic<int> vocalRoot { 0 };
     std::atomic<int> vocalMinor { 0 };
+    std::atomic<float> vocalPitch { 0.0f };
+    std::atomic<float> vocalFormant { 0.0f };
+    std::atomic<int> vocalShiftMode { 0 };
     std::atomic<int> listenLane { -1 };
     std::atomic<int> rigMode { (int) RigMode::Guitar };
     SpectrumTap spectrum;

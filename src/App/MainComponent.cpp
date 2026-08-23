@@ -83,6 +83,18 @@ MainComponent::MainComponent()
         markDirty();
     };
     addAndMakeVisible(vocalKey);
+    vocalShift.setVisible(false);
+    vocalShift.onChange = [this]
+    {
+        vocalStamp.pitch = vocalShift.getPitch();
+        vocalStamp.formant = vocalShift.getFormant();
+        vocalStamp.shiftMode = vocalShift.getMode();
+        processor.setVocalStamp(currentVocalStamp());
+        writeSelectedVocalSlug();
+        showCurrentSlug();
+        markDirty();
+    };
+    addAndMakeVisible(vocalShift);
 
     titleBar.onModeChange = [this] { applyRigMode(titleBar.getMode(), true); };
 
@@ -416,6 +428,10 @@ void MainComponent::loadSettings()
     vocalStamp.root = settings.getIntValue("vocalKeyRoot", 0);
     vocalStamp.minor = settings.getBoolValue("vocalKeyMinor", false);
     vocalKey.setKey(vocalStamp.root, vocalStamp.minor, false);
+    vocalStamp.pitch = (float) settings.getDoubleValue("vocalShiftPitch", 0.0);
+    vocalStamp.formant = (float) settings.getDoubleValue("vocalShiftFormant", 0.0);
+    vocalStamp.shiftMode = juce::jlimit(0, 2, settings.getIntValue("vocalShiftMode", 0));
+    vocalShift.setShift(vocalStamp.pitch, vocalStamp.formant, vocalStamp.shiftMode, false);
     processor.setVocalStamp(vocalStamp);
 
     cab.setSizeAmount((float) settings.getDoubleValue("cabSize", (double) Acoustics::defaultSize), false);
@@ -490,6 +506,9 @@ void MainComponent::saveSettings()
         settings.setValue("vocalFx" + juce::String(i), (double) vocalStamp.fx[(size_t) i]);
     settings.setValue("vocalKeyRoot", vocalStamp.root);
     settings.setValue("vocalKeyMinor", vocalStamp.minor);
+    settings.setValue("vocalShiftPitch", (double) vocalStamp.pitch);
+    settings.setValue("vocalShiftFormant", (double) vocalStamp.formant);
+    settings.setValue("vocalShiftMode", vocalStamp.shiftMode);
     settings.setValue("rigMode", (int) titleBar.getMode());
     settings.setValue("cabSize", (double) cab.getSizeAmount());
     settings.setValue("cabBack", (double) cab.getBackAmount());
@@ -848,6 +867,9 @@ VocalStamp MainComponent::currentVocalStamp() const
         stamp.fx[(size_t) i] = fx[(size_t) i];
     stamp.root = vocalKey.getRoot();
     stamp.minor = vocalKey.isMinor();
+    stamp.pitch = vocalShift.getPitch();
+    stamp.formant = vocalShift.getFormant();
+    stamp.shiftMode = vocalShift.getMode();
     return stamp;
 }
 
@@ -863,6 +885,7 @@ void MainComponent::applyVocalStamp(const VocalStamp& stamp)
     field.setStarValues(axes, false);
     field.setFxValues(fx, false);
     vocalKey.setKey(stamp.root, stamp.minor, false);
+    vocalShift.setShift(stamp.pitch, stamp.formant, stamp.shiftMode, false);
     processor.setVocalStamp(stamp);
     writeSelectedVocalSlug();
     markDirty();
@@ -912,6 +935,7 @@ void MainComponent::applyRigMode(RigMode next, bool fromUser)
     cab.setVisible(! vocals);
     binauralButton.setVisible(! vocals);
     vocalKey.setVisible(vocals);
+    vocalShift.setVisible(vocals);
     presetStore.setBank(vocals ? "vocalPresets" : "presets");
     drawer.rebuild();
     restoreField();
@@ -1149,6 +1173,12 @@ void MainComponent::resized()
         vocalKey.setBounds(fieldBounds.getX() + fieldBounds.getWidth() - 78,
                            fieldBounds.getY() + 2, 76, 40);
         vocalKey.toFront(false);
+    }
+    if (vocalShift.isVisible())
+    {
+        vocalShift.setBounds(fieldBounds.getRight() - 94,
+                             fieldBounds.getBottom() - 104, 84, 94);
+        vocalShift.toFront(false);
     }
     bounds.removeFromTop(8);
 

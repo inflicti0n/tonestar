@@ -13,9 +13,9 @@ GuitarProcessor::GuitarProcessor()
         vocalAxes[(size_t) i].store(0.0f, std::memory_order_relaxed);
     for (int i = 0; i < 6; ++i)
         vocalFx[(size_t) i].store(0.0f, std::memory_order_relaxed);
-    tape.setThroughRender([this] (const VocalStamp& stamp, juce::AudioBuffer<float>& mono, float bpm)
+    tape.setThroughRender([this] (const VocalStamp& stamp, juce::AudioBuffer<float>& stereo, float bpm)
     {
-        renderVocal(mono, stamp, bpm);
+        renderVocal(stereo, stamp, bpm);
     });
 }
 
@@ -109,6 +109,9 @@ void GuitarProcessor::setVocalStamp(const VocalStamp& stamp)
                                   std::memory_order_relaxed);
     vocalRoot.store(((stamp.root % 12) + 12) % 12, std::memory_order_relaxed);
     vocalMinor.store(stamp.minor ? 1 : 0, std::memory_order_relaxed);
+    vocalPitch.store(juce::jlimit(-12.0f, 12.0f, stamp.pitch), std::memory_order_relaxed);
+    vocalFormant.store(juce::jlimit(-12.0f, 12.0f, stamp.formant), std::memory_order_relaxed);
+    vocalShiftMode.store(juce::jlimit(0, 2, stamp.shiftMode), std::memory_order_relaxed);
     tape.setLiveVocalStamp(stamp);
 }
 
@@ -126,6 +129,9 @@ VocalStamp GuitarProcessor::getVocalStamp() const
         stamp.fx[(size_t) i] = vocalFx[(size_t) i].load(std::memory_order_relaxed);
     stamp.root = vocalRoot.load(std::memory_order_relaxed);
     stamp.minor = vocalMinor.load(std::memory_order_relaxed) != 0;
+    stamp.pitch = vocalPitch.load(std::memory_order_relaxed);
+    stamp.formant = vocalFormant.load(std::memory_order_relaxed);
+    stamp.shiftMode = vocalShiftMode.load(std::memory_order_relaxed);
     return stamp;
 }
 
@@ -171,9 +177,9 @@ void GuitarProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     for (auto& voice : laneVocals)
         voice.prepare(sampleRate, preparedMaxBlock);
     tape.prepare(sampleRate, preparedMaxBlock);
-    tape.setThroughRender([this] (const VocalStamp& stamp, juce::AudioBuffer<float>& mono, float bpm)
+    tape.setThroughRender([this] (const VocalStamp& stamp, juce::AudioBuffer<float>& stereo, float bpm)
     {
-        renderVocal(mono, stamp, bpm);
+        renderVocal(stereo, stamp, bpm);
     });
     looper.prepare(sampleRate, preparedMaxBlock);
     tuner.prepare(sampleRate);
@@ -372,7 +378,7 @@ void GuitarProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         const bool followLive = vocals && (listen < 0 || listen == i);
         const VocalStamp stamp = followLive ? live : tape.getVocalStamp(i);
         vocalScratch.clear();
-        vocalScratch.copyFrom(0, 0, dry, 0, numSamples);
+        vocalScratch.copyFrom(0, 0, dry, numSamples);
         vocalScratch.applyGain(inGain);
         laneVocals[(size_t) i].process(vocalScratch, stamp, (float) bpm);
         vocalScratch.applyGain(outGain);

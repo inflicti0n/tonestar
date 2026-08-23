@@ -163,6 +163,9 @@ void TapeEngine::applyStamp(Lane& lane, const VocalStamp& stamp)
                                    std::memory_order_relaxed);
     lane.vRoot.store(((stamp.root % 12) + 12) % 12, std::memory_order_relaxed);
     lane.vMinor.store(stamp.minor ? 1 : 0, std::memory_order_relaxed);
+    lane.vPitch.store(juce::jlimit(-12.0f, 12.0f, stamp.pitch), std::memory_order_relaxed);
+    lane.vFormant.store(juce::jlimit(-12.0f, 12.0f, stamp.formant), std::memory_order_relaxed);
+    lane.vShiftMode.store(juce::jlimit(0, 2, stamp.shiftMode), std::memory_order_relaxed);
 }
 
 VocalStamp TapeEngine::readStamp(const Lane& lane) const
@@ -174,6 +177,9 @@ VocalStamp TapeEngine::readStamp(const Lane& lane) const
         stamp.fx[(size_t) i] = lane.vFx[(size_t) i].load(std::memory_order_relaxed);
     stamp.root = lane.vRoot.load(std::memory_order_relaxed);
     stamp.minor = lane.vMinor.load(std::memory_order_relaxed) != 0;
+    stamp.pitch = lane.vPitch.load(std::memory_order_relaxed);
+    stamp.formant = lane.vFormant.load(std::memory_order_relaxed);
+    stamp.shiftMode = lane.vShiftMode.load(std::memory_order_relaxed);
     return stamp;
 }
 
@@ -186,6 +192,9 @@ VocalStamp TapeEngine::readLiveStamp() const
         stamp.fx[(size_t) i] = liveFx[(size_t) i].load(std::memory_order_relaxed);
     stamp.root = liveRoot.load(std::memory_order_relaxed);
     stamp.minor = liveMinor.load(std::memory_order_relaxed) != 0;
+    stamp.pitch = livePitch.load(std::memory_order_relaxed);
+    stamp.formant = liveFormant.load(std::memory_order_relaxed);
+    stamp.shiftMode = liveShiftMode.load(std::memory_order_relaxed);
     return stamp;
 }
 
@@ -199,6 +208,9 @@ void TapeEngine::setLiveVocalStamp(const VocalStamp& stamp)
                                  std::memory_order_relaxed);
     liveRoot.store(((stamp.root % 12) + 12) % 12, std::memory_order_relaxed);
     liveMinor.store(stamp.minor ? 1 : 0, std::memory_order_relaxed);
+    livePitch.store(juce::jlimit(-12.0f, 12.0f, stamp.pitch), std::memory_order_relaxed);
+    liveFormant.store(juce::jlimit(-12.0f, 12.0f, stamp.formant), std::memory_order_relaxed);
+    liveShiftMode.store(juce::jlimit(0, 2, stamp.shiftMode), std::memory_order_relaxed);
 }
 
 void TapeEngine::setVocalSlug(int lane, const juce::String& slug)

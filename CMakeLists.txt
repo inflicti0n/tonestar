@@ -87,6 +87,8 @@ target_sources(ToneStar PRIVATE
     src/Vocals/VocalFx.h
     src/Vocals/VocalKey.h
     src/Vocals/VocalPitch.h
+    src/Vocals/VocalShift.h
+    src/Vocals/VocalShiftPad.h
     src/Vocals/VocalChain.h
 )
 

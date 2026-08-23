@@ -16,6 +16,7 @@
 #include "Appearance/TitleBar.h"
 #include "Vocals/VocalCompose.h"
 #include "Vocals/VocalKey.h"
+#include "Vocals/VocalShiftPad.h"
 
 #include <juce_audio_utils/juce_audio_utils.h>
 
@@ -81,6 +82,7 @@ private:
     ToneField field;
     CabWidget cab;
     VocalKey vocalKey;
+    VocalShiftPad vocalShift;
     PresetStore presetStore;
     PresetDrawer drawer { presetStore };
     AdvancedDrawer advanced;

@@ -86,19 +86,23 @@ struct ToneSlug
     static bool isVocal(const juce::String& slug)
     {
         const auto text = slug.trim();
-        return text.length() == 17 && text[0] == 'V';
+        return text.isNotEmpty() && text[0] == 'V'
+               && (text.length() == 17 || text.length() == 21);
     }
 
     static juce::String encodeVocal(const VocalStamp& stamp)
     {
-        juce::uint8 bytes[12] {};
+        juce::uint8 bytes[15] {};
         for (int i = 0; i < 5; ++i)
             bytes[i] = toByte(stamp.axes[(size_t) i]);
         for (int i = 0; i < 6; ++i)
             bytes[5 + i] = toByte(stamp.fx[(size_t) i]);
         bytes[11] = (juce::uint8) ((((stamp.root % 12) + 12) % 12) | (stamp.minor ? 0x10 : 0));
-        scramble(bytes, 12);
-        return "V" + encodeAlphabet(bytes, 12);
+        bytes[12] = toShiftByte(stamp.pitch);
+        bytes[13] = toShiftByte(stamp.formant);
+        bytes[14] = (juce::uint8) juce::jlimit(0, 2, stamp.shiftMode);
+        scramble(bytes, 15);
+        return "V" + encodeAlphabet(bytes, 15);
     }
 
     static bool decodeVocal(const juce::String& slug, VocalStamp& stamp)
@@ -108,11 +112,12 @@ struct ToneSlug
         if (! isVocal(text))
             return false;
 
-        juce::uint8 bytes[12] {};
-        if (! decodeAlphabet(text.substring(1), bytes, 12))
+        const int payload = text.length() == 21 ? 15 : 12;
+        juce::uint8 bytes[15] {};
+        if (! decodeAlphabet(text.substring(1), bytes, payload))
             return false;
 
-        scramble(bytes, 12);
+        scramble(bytes, payload);
         for (int i = 0; i < 5; ++i)
             stamp.axes[(size_t) i] = fromByte(bytes[i]);
         for (int i = 0; i < 6; ++i)
@@ -121,6 +126,12 @@ struct ToneSlug
         if (stamp.root > 11)
             stamp.root = 0;
         stamp.minor = (bytes[11] & 0x10) != 0;
+        if (payload >= 15)
+        {
+            stamp.pitch = fromShiftByte(bytes[12]);
+            stamp.formant = fromShiftByte(bytes[13]);
+            stamp.shiftMode = juce::jlimit(0, 2, (int) (bytes[14] & 0x03));
+        }
         return true;
     }
 
@@ -142,6 +153,16 @@ private:
     static float fromByte(juce::uint8 value)
     {
         return (float) value / 255.0f;
+    }
+
+    static juce::uint8 toShiftByte(float semitones)
+    {
+        return toByte(juce::jlimit(0.0f, 1.0f, (semitones + 12.0f) / 24.0f));
+    }
+
+    static float fromShiftByte(juce::uint8 value)
+    {
+        return fromByte(value) * 24.0f - 12.0f;
     }
 
     static void scramble(juce::uint8* bytes, int size)

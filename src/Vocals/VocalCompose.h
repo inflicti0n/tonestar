@@ -12,6 +12,9 @@ struct VocalStamp
     std::array<float, 6> fx {};
     int root = 0;
     bool minor = false;
+    float pitch = 0.0f;
+    float formant = 0.0f;
+    int shiftMode = 0;
 };
 
 struct VocalParams

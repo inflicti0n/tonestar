@@ -136,6 +136,9 @@ private:
         std::array<std::atomic<float>, 6> vFx {};
         std::atomic<int> vRoot { 0 };
         std::atomic<int> vMinor { 0 };
+        std::atomic<float> vPitch { 0.0f };
+        std::atomic<float> vFormant { 0.0f };
+        std::atomic<int> vShiftMode { 0 };
         float hops[maxHops] {};
         juce::String name;
         juce::String vocalSlug;
@@ -167,6 +170,9 @@ private:
     std::array<std::atomic<float>, 6> liveFx {};
     std::atomic<int> liveRoot { 0 };
     std::atomic<int> liveMinor { 0 };
+    std::atomic<float> livePitch { 0.0f };
+    std::atomic<float> liveFormant { 0.0f };
+    std::atomic<int> liveShiftMode { 0 };
     std::atomic<int> recordThrough { 0 };
     std::atomic<float> lastBpm { 120.0f };
 
