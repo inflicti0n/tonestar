@@ -62,6 +62,11 @@ target_sources(ToneStar PRIVATE
     src/Tape/AdvancedDrawer.h
     src/Tape/TapeTimeline.h
     src/Tape/TakeRecorder.h
+    src/Automation/AutomationParam.h
+    src/Automation/AutomationTrack.h
+    src/Automation/AutomationBank.h
+    src/Automation/AutomationView.cpp
+    src/Automation/AutomationView.h
     src/Looper/LooperEngine.cpp
     src/Looper/LooperEngine.h
     src/Looper/LooperDrawer.cpp
@@ -82,6 +87,7 @@ target_sources(ToneStar PRIVATE
     src/Appearance/WindowShell.h
     src/Appearance/Theme.cpp
     src/Appearance/Theme.h
+    src/Appearance/DragTip.h
     src/Vocals/VocalCompose.h
     src/Vocals/VocalEngine.h
     src/Vocals/VocalFx.h
@@ -109,6 +115,7 @@ target_compile_definitions(ToneStar PRIVATE
     $<$<BOOL:${WIN32}>:JUCE_ASIO=1>
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
+    JUCE_USE_MP3AUDIOFORMAT=1
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:ToneStar,JUCE_PRODUCT_NAME>"
     JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:ToneStar,JUCE_VERSION>"

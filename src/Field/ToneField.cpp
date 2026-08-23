@@ -1,4 +1,5 @@
 #include "Field/ToneField.h"
+#include "Appearance/DragTip.h"
 #include "Vocals/VocalCompose.h"
 #include <cmath>
 
@@ -308,6 +309,8 @@ void ToneField::setFxFromEvent(const juce::MouseEvent& e)
     focusKind = Focus::Fx;
     if (onChange != nullptr)
         onChange();
+    DragTip::show(*this, fxSpoke(dragFx, fxDisplay[(size_t) dragFx]),
+                  DragTip::percent(fxDisplay[(size_t) dragFx]), Theme::rose());
     repaint();
 }
 
@@ -316,7 +319,18 @@ void ToneField::refreshTooltip(juce::Point<float> p)
     if (mode == RigMode::Vocals)
     {
         const int fx = hitFxHandle(p);
-        setTooltip(fx >= 0 ? juce::String(vocalFxTip(fx)) : juce::String());
+        if (fx >= 0)
+        {
+            setTooltip(vocalFxTip(fx));
+            return;
+        }
+        const int axis = star.getHoverAxis();
+        if (axis >= 0)
+        {
+            setTooltip(vocalAxisTip(axis));
+            return;
+        }
+        setTooltip({});
         return;
     }
 
@@ -379,10 +393,14 @@ void ToneField::mouseUp(const juce::MouseEvent& e)
     if (dragFx >= 0)
     {
         dragFx = -1;
+        DragTip::hide();
+        repaint();
         return;
     }
 
     star.mouseUp(e.getEventRelativeTo(&star));
+    DragTip::hide();
+    repaint();
 }
 
 void ToneField::mouseMove(const juce::MouseEvent& e)
@@ -425,7 +443,10 @@ void ToneField::mouseMove(const juce::MouseEvent& e)
 
     star.mouseMove(e.getEventRelativeTo(&star));
     if (star.getHoverAxis() >= 0)
+    {
         focusKind = Focus::Star;
+        refreshTooltip(e.position);
+    }
 }
 
 void ToneField::mouseExit(const juce::MouseEvent& e)

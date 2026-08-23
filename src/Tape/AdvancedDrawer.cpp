@@ -1,4 +1,5 @@
 #include "Tape/AdvancedDrawer.h"
+#include "Appearance/DragTip.h"
 #include "Appearance/Theme.h"
 #include "Appearance/WindowShell.h"
 #include <cmath>
@@ -279,28 +280,73 @@ void AdvancedDrawer::TunerFace::paint(juce::Graphics& g)
 
 namespace
 {
-    constexpr int laneH = 72;
+    constexpr int laneH = 88;
+    constexpr int autoH = AutomationView::height;
     constexpr int laneGap = 6;
     constexpr int edgeHit = 10;
     constexpr float loopY = 3.0f;
     constexpr float loopH = 12.0f;
     constexpr float loopEdgeW = 5.0f;
+    constexpr float handleHalfW = 8.0f;
+    constexpr float handleH = 18.0f;
+    constexpr float handleR = 3.0f;
 }
 
 AdvancedDrawer::LaneRow::LaneRow(int indexToUse)
     : index(indexToUse)
 {
-    muteButton.setWantsKeyboardFocus(false);
-    muteButton.onClick = [this]
+    setPaintingIsUnclipped(true);
+    pie.onProcess = [this](bool on)
     {
-        if (tape != nullptr)
-        {
-            tape->setMute(index, muteButton.getToggleState());
-            if (onChanged != nullptr)
-                onChanged();
-        }
+        if (tape == nullptr)
+            return;
+        tape->setProcess(index, on);
+        if (onChanged != nullptr)
+            onChanged();
+        repaint();
     };
-    addAndMakeVisible(muteButton);
+    pie.onMute = [this](bool on)
+    {
+        if (tape == nullptr)
+            return;
+        tape->setMute(index, on);
+        if (onChanged != nullptr)
+            onChanged();
+    };
+    pie.onAutomate = [this](bool on)
+    {
+        setExpanded(on);
+        if (tape != nullptr)
+            tape->setArmedLane(index);
+        if (onSelectClip != nullptr)
+            onSelectClip(index);
+        if (onChanged != nullptr)
+            onChanged();
+    };
+    addAndMakeVisible(pie);
+
+    autoView.setLane(index);
+    autoView.setVisible(false);
+    autoView.getLiveStamp = [this]
+    {
+        return getLiveStamp != nullptr ? getLiveStamp() : VocalStamp {};
+    };
+    autoView.onChanged = [this]
+    {
+        if (onChanged != nullptr)
+            onChanged();
+    };
+    autoView.onEdited = [this]
+    {
+        if (onAutomationEdited != nullptr)
+            onAutomationEdited();
+    };
+    autoView.onViewChanged = [this]
+    {
+        if (onViewChanged != nullptr)
+            onViewChanged();
+    };
+    addAndMakeVisible(autoView);
 
     editor.setVisible(false);
     editor.setJustification(juce::Justification::topLeft);
@@ -314,31 +360,64 @@ AdvancedDrawer::LaneRow::LaneRow(int indexToUse)
 void AdvancedDrawer::LaneRow::setTape(TapeEngine* engineToUse)
 {
     tape = engineToUse;
+    autoView.setTape(engineToUse);
 }
 
 void AdvancedDrawer::LaneRow::setTimeline(TapeTimeline* timelineToUse)
 {
     timeline = timelineToUse;
+    autoView.setTimeline(timelineToUse);
+}
+
+int AdvancedDrawer::LaneRow::rowHeight() const
+{
+    return expanded ? laneH + autoH : laneH;
+}
+
+void AdvancedDrawer::LaneRow::setExpanded(bool shouldExpand)
+{
+    if (expanded == shouldExpand)
+        return;
+    expanded = shouldExpand;
+    pie.setAutoOn(shouldExpand);
+    if (tape != nullptr)
+        tape->getAutomation().track(index).setExpanded(shouldExpand);
+    autoView.setVisible(expanded);
+    if (onLayoutChanged != nullptr)
+        onLayoutChanged();
+    resized();
+    repaint();
+}
+
+juce::Rectangle<int> AdvancedDrawer::LaneRow::laneBounds() const
+{
+    return { 0, 0, getWidth(), laneH };
 }
 
 juce::Rectangle<float> AdvancedDrawer::LaneRow::waveBounds() const
 {
-    return getLocalBounds().toFloat().withTrimmedLeft((float) TapeTimeline::waveLeft - 4.0f).reduced(4.0f, 10.0f);
+    return laneBounds().toFloat().withTrimmedLeft((float) TapeTimeline::waveLeft - 4.0f).reduced(4.0f, 8.0f);
 }
 
 juce::Rectangle<float> AdvancedDrawer::LaneRow::nameBounds() const
 {
-    return { 8.0f, 4.0f, 86.0f, 20.0f };
+    return { 8.0f, 4.0f, 120.0f, 20.0f };
 }
 
 juce::Rectangle<float> AdvancedDrawer::LaneRow::levelBounds() const
 {
-    return { 100.0f, 16.0f, 8.0f, 42.0f };
+    const auto pan = panBounds();
+    return { pan.getX(), 51.0f, pan.getWidth(), 8.0f };
 }
 
 juce::Rectangle<float> AdvancedDrawer::LaneRow::panBounds() const
 {
-    return { 34.0f, 46.0f, 58.0f, 8.0f };
+    constexpr float pad = 6.0f;
+    constexpr float barH = 6.0f;
+    constexpr float labelW = 11.0f;
+    constexpr float left = 64.0f;
+    constexpr float right = 162.0f;
+    return { left + labelW, (float) laneH - pad - barH, right - left - labelW * 2.0f, barH };
 }
 
 juce::Rectangle<float> AdvancedDrawer::LaneRow::panThumb() const
@@ -346,20 +425,20 @@ juce::Rectangle<float> AdvancedDrawer::LaneRow::panThumb() const
     const float t = tape != nullptr ? juce::jlimit(-1.0f, 1.0f, tape->getPan(index)) : 0.0f;
     const auto bar = panBounds();
     const float x = bar.getX() + (t + 1.0f) * 0.5f * bar.getWidth();
-    return juce::Rectangle<float>(14.0f, 14.0f).withCentre({ x, bar.getCentreY() });
+    return juce::Rectangle<float>(5.0f, 12.0f).withCentre({ x, bar.getCentreY() });
 }
 
 juce::Rectangle<float> AdvancedDrawer::LaneRow::levelThumb() const
 {
     const float t = tape != nullptr ? juce::jlimit(0.0f, 1.0f, tape->getLevel(index)) : 1.0f;
     const auto bar = levelBounds();
-    const float y = bar.getBottom() - t * bar.getHeight();
-    return juce::Rectangle<float>(14.0f, 14.0f).withCentre({ bar.getCentreX(), y });
+    const float x = bar.getX() + t * bar.getWidth();
+    return juce::Rectangle<float>(14.0f, 14.0f).withCentre({ x, bar.getCentreY() });
 }
 
 bool AdvancedDrawer::LaneRow::inLevel(juce::Point<float> p) const
 {
-    return levelBounds().expanded(10.0f, 8.0f).contains(p) || levelThumb().expanded(4.0f).contains(p);
+    return levelBounds().expanded(6.0f, 8.0f).contains(p) || levelThumb().expanded(4.0f).contains(p);
 }
 
 bool AdvancedDrawer::LaneRow::inPan(juce::Point<float> p) const
@@ -367,14 +446,16 @@ bool AdvancedDrawer::LaneRow::inPan(juce::Point<float> p) const
     return panBounds().expanded(8.0f, 10.0f).contains(p) || panThumb().expanded(4.0f).contains(p);
 }
 
-void AdvancedDrawer::LaneRow::setLevelFromY(float y)
+void AdvancedDrawer::LaneRow::setLevelFromX(float x)
 {
     if (tape == nullptr)
         return;
     const auto bar = levelBounds();
-    if (bar.getHeight() <= 0.0f)
+    if (bar.getWidth() <= 0.0f)
         return;
-    tape->setLevel(index, (bar.getBottom() - y) / bar.getHeight());
+    tape->setLevel(index, (x - bar.getX()) / bar.getWidth());
+    DragTip::show(*this, levelThumb().getCentre(),
+                  DragTip::percent(tape->getLevel(index)), Theme::starlight());
     repaint();
 }
 
@@ -386,6 +467,8 @@ void AdvancedDrawer::LaneRow::setPanFromX(float x)
     if (bar.getWidth() <= 0.0f)
         return;
     tape->setPan(index, (x - bar.getX()) / bar.getWidth() * 2.0f - 1.0f);
+    DragTip::show(*this, panThumb().getCentre(),
+                  DragTip::pan(tape->getPan(index)), Theme::starlight());
     repaint();
 }
 
@@ -446,7 +529,7 @@ void AdvancedDrawer::LaneRow::drawWave(juce::Graphics& g, juce::Rectangle<float>
 
 void AdvancedDrawer::LaneRow::paint(juce::Graphics& g)
 {
-    auto bounds = getLocalBounds().toFloat();
+    auto bounds = laneBounds().toFloat();
     const bool armed = tape != nullptr && tape->getArmedLane() == index;
     const bool recHere = tape != nullptr && tape->isRecording() && tape->getRecLane() == index;
     auto fill = Theme::panel();
@@ -470,19 +553,27 @@ void AdvancedDrawer::LaneRow::paint(juce::Graphics& g)
     g.setColour(Theme::voidFill());
     g.fillRoundedRectangle(bar, 5.0f);
     g.setColour(Theme::starlight());
-    g.fillRoundedRectangle(bar.withTrimmedTop(bar.getHeight() * (1.0f - amount)), 5.0f);
+    g.fillRoundedRectangle(bar.withWidth(bar.getWidth() * amount), 5.0f);
     g.fillEllipse(levelThumb());
 
     const auto panBar = panBounds();
     g.setColour(Theme::voidFill());
-    g.fillRoundedRectangle(panBar, 5.0f);
+    g.fillRoundedRectangle(panBar, 3.0f);
     const float midX = panBar.getCentreX();
     const float thumbX = panThumb().getCentreX();
     auto panFill = juce::Rectangle<float>(juce::jmin(midX, thumbX), panBar.getY(),
                                           std::abs(thumbX - midX), panBar.getHeight());
     g.setColour(Theme::starlight());
-    g.fillRoundedRectangle(panFill, 5.0f);
-    g.fillEllipse(panThumb());
+    g.fillRoundedRectangle(panFill, 3.0f);
+    g.fillRoundedRectangle(panThumb(), 1.6f);
+
+    if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
+        g.setFont(laf->font(11.0f, true));
+    g.setColour(Theme::dim());
+    const auto panL = juce::Rectangle<float>(panBar.getX() - 12.0f, panBar.getY() - 4.0f, 11.0f, 14.0f);
+    const auto panR = juce::Rectangle<float>(panBar.getRight() + 1.0f, panBar.getY() - 4.0f, 11.0f, 14.0f);
+    g.drawText("L", panL, juce::Justification::centred, false);
+    g.drawText("R", panR, juce::Justification::centred, false);
 
     const auto wave = waveBounds();
     g.setColour(Theme::voidFill());
@@ -546,8 +637,9 @@ void AdvancedDrawer::LaneRow::paint(juce::Graphics& g)
 
 void AdvancedDrawer::LaneRow::resized()
 {
-    muteButton.setBounds(juce::Rectangle<int>(8, 38, 22, 22));
+    pie.setBounds(juce::Rectangle<int>(6, 28, 54, 54));
     editor.setBounds(nameBounds().toNearestInt());
+    autoView.setBounds(0, laneH, getWidth(), autoH);
 }
 
 juce::Rectangle<float> AdvancedDrawer::LaneRow::deleteBoundsFor(juce::Rectangle<float> clip) const
@@ -561,6 +653,26 @@ void AdvancedDrawer::LaneRow::setSelected(bool shouldSelect)
     if (! selected)
         deleteHot = false;
     repaint();
+}
+
+void AdvancedDrawer::LaneRow::beginViewPan(float x)
+{
+    if (timeline == nullptr)
+        return;
+    drag = Drag::ViewPan;
+    viewPanStart = timeline->viewStart;
+    dragStartX = (int) x;
+    setMouseCursor(juce::MouseCursor::DraggingHandCursor);
+}
+
+void AdvancedDrawer::LaneRow::applyViewPan(float x)
+{
+    if (timeline == nullptr)
+        return;
+    const auto wave = waveBounds();
+    timeline->panByDrag(viewPanStart, (float) dragStartX, x, wave.getX());
+    if (onViewChanged != nullptr)
+        onViewChanged();
 }
 
 void AdvancedDrawer::LaneRow::mouseDown(const juce::MouseEvent& e)
@@ -579,6 +691,15 @@ void AdvancedDrawer::LaneRow::mouseDown(const juce::MouseEvent& e)
     if (onFinishOthers != nullptr)
         onFinishOthers();
 
+    if (e.position.y >= (float) laneH)
+        return;
+
+    if (e.mods.isMiddleButtonDown() && e.position.x >= (float) TapeTimeline::waveLeft)
+    {
+        beginViewPan((float) e.x);
+        return;
+    }
+
     if (inPan(e.position))
     {
         draggingPan = true;
@@ -589,7 +710,7 @@ void AdvancedDrawer::LaneRow::mouseDown(const juce::MouseEvent& e)
     if (inLevel(e.position))
     {
         draggingLevel = true;
-        setLevelFromY(e.position.y);
+        setLevelFromX(e.position.x);
         return;
     }
 
@@ -619,8 +740,15 @@ void AdvancedDrawer::LaneRow::mouseDown(const juce::MouseEvent& e)
         return;
     }
 
-    if (vis.isEmpty())
+    if (! wave.contains(p) || vis.isEmpty() || ! vis.contains(p))
     {
+        if (wave.contains(p) || p.x >= (float) TapeTimeline::waveLeft)
+        {
+            if (onSelectClip != nullptr)
+                onSelectClip(-1);
+            beginViewPan((float) e.x);
+            return;
+        }
         if (onSelectClip != nullptr)
             onSelectClip(-1);
         return;
@@ -647,18 +775,11 @@ void AdvancedDrawer::LaneRow::mouseDown(const juce::MouseEvent& e)
         return;
     }
 
-    if (vis.contains(p))
-    {
-        if (onSelectClip != nullptr)
-            onSelectClip(index);
-        drag = Drag::Move;
-        dragStartValue = tape->getLane(index).start;
-        setMouseCursor(juce::MouseCursor::DraggingHandCursor);
-    }
-    else if (onSelectClip != nullptr)
-    {
-        onSelectClip(-1);
-    }
+    if (onSelectClip != nullptr)
+        onSelectClip(index);
+    drag = Drag::Move;
+    dragStartValue = tape->getLane(index).start;
+    setMouseCursor(juce::MouseCursor::DraggingHandCursor);
 }
 
 void AdvancedDrawer::LaneRow::mouseDrag(const juce::MouseEvent& e)
@@ -671,7 +792,13 @@ void AdvancedDrawer::LaneRow::mouseDrag(const juce::MouseEvent& e)
 
     if (draggingLevel)
     {
-        setLevelFromY(e.position.y);
+        setLevelFromX(e.position.x);
+        return;
+    }
+
+    if (drag == Drag::ViewPan)
+    {
+        applyViewPan((float) e.x);
         return;
     }
 
@@ -700,7 +827,7 @@ void AdvancedDrawer::LaneRow::mouseDrag(const juce::MouseEvent& e)
 
 void AdvancedDrawer::LaneRow::mouseUp(const juce::MouseEvent&)
 {
-    if (draggingPan || draggingLevel || drag != Drag::None)
+    if (draggingPan || draggingLevel || (drag != Drag::None && drag != Drag::ViewPan))
     {
         if (onChanged != nullptr)
             onChanged();
@@ -709,6 +836,18 @@ void AdvancedDrawer::LaneRow::mouseUp(const juce::MouseEvent&)
     draggingLevel = false;
     drag = Drag::None;
     setMouseCursor(juce::MouseCursor::NormalCursor);
+    DragTip::hide();
+    repaint();
+}
+
+void AdvancedDrawer::LaneRow::mouseDoubleClick(const juce::MouseEvent& e)
+{
+    if (! inPan(e.position) || tape == nullptr)
+        return;
+    tape->setPan(index, 0.0f);
+    if (onChanged != nullptr)
+        onChanged();
+    repaint();
 }
 
 void AdvancedDrawer::LaneRow::mouseMove(const juce::MouseEvent& e)
@@ -735,6 +874,8 @@ void AdvancedDrawer::LaneRow::mouseMove(const juce::MouseEvent& e)
         setMouseCursor(juce::MouseCursor::LeftRightResizeCursor);
     else if (vis.contains(e.position))
         setMouseCursor(juce::MouseCursor::PointingHandCursor);
+    else if (wave.contains(e.position) || e.position.x >= (float) TapeTimeline::waveLeft)
+        setMouseCursor(juce::MouseCursor::DraggingHandCursor);
     else
         setMouseCursor(juce::MouseCursor::NormalCursor);
 }
@@ -750,50 +891,18 @@ void AdvancedDrawer::LaneRow::mouseExit(const juce::MouseEvent&)
 
 void AdvancedDrawer::LaneRow::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
 {
-    if (inPan(e.position) && tape != nullptr)
-    {
-        float delta = wheel.deltaX != 0.0f ? wheel.deltaX : wheel.deltaY;
-        if (wheel.isReversed)
-            delta = -delta;
-        const float step = delta > 0.0f ? 0.05f : (delta < 0.0f ? -0.05f : 0.0f);
-        if (step != 0.0f)
-        {
-            tape->setPan(index, tape->getPan(index) + step);
-            if (onChanged != nullptr)
-                onChanged();
-            repaint();
-        }
-        return;
-    }
-
-    if (inLevel(e.position) && tape != nullptr)
-    {
-        float delta = wheel.deltaY != 0.0f ? wheel.deltaY : wheel.deltaX;
-        if (wheel.isReversed)
-            delta = -delta;
-        const float step = delta > 0.0f ? 0.05f : (delta < 0.0f ? -0.05f : 0.0f);
-        if (step != 0.0f)
-        {
-            tape->setLevel(index, tape->getLevel(index) + step);
-            if (onChanged != nullptr)
-                onChanged();
-            repaint();
-        }
-        return;
-    }
-
     const auto wave = waveBounds();
-    if (timeline == nullptr || ! wave.contains(e.position))
+    if (timeline != nullptr && e.position.x >= (float) TapeTimeline::waveLeft)
     {
-        if (auto* parent = getParentComponent())
-            parent->mouseWheelMove(e.getEventRelativeTo(parent), wheel);
+        timeline->wheel(e.position.x, wave.getX(), wheel.deltaY, wheel.deltaX,
+                        wheel.isReversed, e.mods.isShiftDown());
+        if (onViewChanged != nullptr)
+            onViewChanged();
         return;
     }
 
-    timeline->wheel(e.position.x, wave.getX(), wheel.deltaY, wheel.deltaX,
-                    wheel.isReversed, e.mods.isShiftDown());
-    if (onViewChanged != nullptr)
-        onViewChanged();
+    if (auto* parent = getParentComponent())
+        parent->mouseWheelMove(e.getEventRelativeTo(parent), wheel);
 }
 
 void AdvancedDrawer::LaneRow::startNameEdit()
@@ -832,7 +941,23 @@ void AdvancedDrawer::LaneRow::finishNameEdit()
 void AdvancedDrawer::LaneRow::refresh()
 {
     if (tape != nullptr)
-        muteButton.setToggleState(tape->isMuted(index), juce::dontSendNotification);
+    {
+        const bool vocal = tape->isVocalLane(index);
+        pie.setProcessEnabled(vocal);
+        pie.setProcessOn(vocal && tape->isProcess(index));
+        pie.setMuteOn(tape->isMuted(index));
+        const bool want = tape->getAutomation().track(index).isExpanded();
+        pie.setAutoOn(want);
+        if (want != expanded)
+        {
+            expanded = want;
+            autoView.setVisible(expanded);
+            if (onLayoutChanged != nullptr)
+                onLayoutChanged();
+            resized();
+        }
+        autoView.refresh();
+    }
     repaint();
 }
 
@@ -845,6 +970,20 @@ AdvancedDrawer::LaneList::LaneList()
         {
             if (onChanged != nullptr)
                 onChanged();
+        };
+        row->onLayoutChanged = [this]
+        {
+            if (onLayoutChanged != nullptr)
+                onLayoutChanged();
+        };
+        row->getLiveStamp = [this]
+        {
+            return getLiveStamp != nullptr ? getLiveStamp() : VocalStamp {};
+        };
+        row->onAutomationEdited = [this]
+        {
+            if (onAutomationEdited != nullptr)
+                onAutomationEdited();
         };
         row->onFinishOthers = [this, i]
         {
@@ -901,8 +1040,24 @@ void AdvancedDrawer::LaneList::setTape(TapeEngine* engineToUse)
 
 void AdvancedDrawer::LaneList::setTimeline(TapeTimeline* timelineToUse)
 {
+    timeline = timelineToUse;
     for (auto* row : rows)
         row->setTimeline(timelineToUse);
+}
+
+void AdvancedDrawer::LaneList::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel)
+{
+    if (timeline != nullptr && e.position.x >= (float) TapeTimeline::waveLeft)
+    {
+        timeline->wheel(e.position.x, (float) TapeTimeline::waveLeft, wheel.deltaY, wheel.deltaX,
+                        wheel.isReversed, e.mods.isShiftDown());
+        if (onViewChanged != nullptr)
+            onViewChanged();
+        return;
+    }
+
+    if (auto* parent = getParentComponent())
+        parent->mouseWheelMove(e.getEventRelativeTo(parent), wheel);
 }
 
 void AdvancedDrawer::LaneList::refresh()
@@ -911,12 +1066,20 @@ void AdvancedDrawer::LaneList::refresh()
         row->refresh();
 }
 
+int AdvancedDrawer::LaneList::contentHeight() const
+{
+    int h = 0;
+    for (auto* row : rows)
+        h += row->rowHeight() + laneGap;
+    return juce::jmax(0, h - laneGap);
+}
+
 void AdvancedDrawer::LaneList::resized()
 {
     auto bounds = getLocalBounds();
     for (auto* row : rows)
     {
-        row->setBounds(bounds.removeFromTop(laneH));
+        row->setBounds(bounds.removeFromTop(row->rowHeight()));
         bounds.removeFromTop(laneGap);
     }
 }
@@ -927,7 +1090,30 @@ juce::Rectangle<float> AdvancedDrawer::Ruler::handleBounds() const
         return {};
 
     const float x = timeline->sampleToX(tape->getPlayhead(), (float) TapeTimeline::waveLeft);
-    return { x - 7.0f, loopY, 14.0f, loopH };
+    return { x - handleHalfW, 0.0f, handleHalfW * 2.0f, handleH };
+}
+
+juce::Path AdvancedDrawer::Ruler::handlePath() const
+{
+    juce::Path path;
+    const auto b = handleBounds();
+    if (b.isEmpty())
+        return path;
+
+    const float x = b.getCentreX();
+    const float top = b.getY();
+    const float left = b.getX();
+    const float right = b.getRight();
+    const float r = juce::jmin(handleR, b.getWidth() * 0.35f, b.getHeight() * 0.22f);
+
+    path.startNewSubPath(left + r, top);
+    path.lineTo(right - r, top);
+    path.quadraticTo(right, top, right, top + r);
+    path.lineTo(x, b.getBottom());
+    path.lineTo(left, top + r);
+    path.quadraticTo(left, top, left + r, top);
+    path.closeSubPath();
+    return path;
 }
 
 juce::Rectangle<float> AdvancedDrawer::Ruler::loopBar() const
@@ -955,16 +1141,18 @@ void AdvancedDrawer::Ruler::seekTo(float x)
     if (tape == nullptr || timeline == nullptr)
         return;
     tape->setPlayhead(tape->snapSample(timeline->xToSample(x, (float) TapeTimeline::waveLeft)));
+    if (onSeek != nullptr)
+        onSeek();
 }
 
 void AdvancedDrawer::Ruler::applyLoopCursor(juce::Point<float> p)
 {
-    if (handleBounds().expanded(4.0f, 2.0f).contains(p))
+    if (handleBounds().expanded(6.0f, 3.0f).contains(p))
         setMouseCursor(juce::MouseCursor::PointingHandCursor);
     else if (loopEdge(false).expanded(3.0f, 1.0f).contains(p)
              || loopEdge(true).expanded(3.0f, 1.0f).contains(p))
         setMouseCursor(juce::MouseCursor::LeftRightResizeCursor);
-    else if (loopBar().contains(p))
+    else if (loopBar().contains(p) || p.x >= (float) TapeTimeline::waveLeft)
         setMouseCursor(juce::MouseCursor::DraggingHandCursor);
     else
         setMouseCursor(juce::MouseCursor::NormalCursor);
@@ -990,7 +1178,7 @@ void AdvancedDrawer::Ruler::paint(juce::Graphics& g)
     const float h = (float) getHeight();
 
     if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
-        g.setFont(laf->font(11.0f, true));
+        g.setFont(laf->font(14.0f, true));
 
     for (int b = first; b <= last; ++b)
     {
@@ -1007,8 +1195,9 @@ void AdvancedDrawer::Ruler::paint(juce::Graphics& g)
             g.setColour(Theme::starlight().withAlpha(0.40f));
             g.fillRect(x, h - 11.0f, 1.0f, 11.0f);
             g.setColour(Theme::mist().withAlpha(0.85f));
-            g.drawText(juce::String(b / 4 + 1), (int) x + 3, 1, 28, 12,
-                       juce::Justification::centredLeft, false);
+            constexpr int labelW = 36;
+            g.drawText(juce::String(b / 4 + 1), (int) std::lround(x) - labelW / 2, 0, labelW, 15,
+                       juce::Justification::centred, false);
         }
         else if (timeline->showQuarters())
         {
@@ -1052,28 +1241,29 @@ void AdvancedDrawer::Ruler::paint(juce::Graphics& g)
     }
 
     const float px = timeline->sampleToX(tape->getPlayhead(), waveX);
-    if (px < wave.getX() - 8.0f || px > wave.getRight() + 8.0f)
+    if (px < wave.getX() - handleHalfW - 2.0f || px > wave.getRight() + handleHalfW + 2.0f)
         return;
 
-    juce::Path tri;
-    tri.addTriangle(px - 6.5f, loopY, px + 6.5f, loopY, px, loopY + loopH);
     g.setColour(Theme::starlight());
-    g.fillPath(tri);
+    g.fillPath(handlePath());
 }
 
 void AdvancedDrawer::Ruler::mouseDown(const juce::MouseEvent& e)
 {
-    if (timeline == nullptr || (float) e.x < (float) TapeTimeline::waveLeft)
+    if (timeline == nullptr)
         return;
 
     panStart = timeline->viewStart;
     panStartX = e.x;
-    if (handleBounds().expanded(4.0f, 2.0f).contains(e.position))
+    if (handleBounds().expanded(6.0f, 3.0f).contains(e.position))
     {
         drag = Drag::Handle;
-        seekTo((float) e.x);
+        seekTo(juce::jmax((float) TapeTimeline::waveLeft, (float) e.x));
         return;
     }
+
+    if ((float) e.x < (float) TapeTimeline::waveLeft)
+        return;
 
     if (tape != nullptr && tape->isLoop())
     {
@@ -1136,10 +1326,7 @@ void AdvancedDrawer::Ruler::mouseDrag(const juce::MouseEvent& e)
     if (drag != Drag::Pan)
         return;
 
-    const int delta = timeline->xToSample((float) panStartX, (float) TapeTimeline::waveLeft)
-                      - timeline->xToSample((float) e.x, (float) TapeTimeline::waveLeft);
-    timeline->viewStart = juce::jmax(0, panStart + delta);
-    timeline->markNav();
+    timeline->panByDrag(panStart, (float) panStartX, (float) e.x, (float) TapeTimeline::waveLeft);
     if (onViewChanged != nullptr)
         onViewChanged();
 }
@@ -1322,6 +1509,7 @@ AdvancedDrawer::AdvancedDrawer()
     stopButton.setClickingTogglesState(false);
     folderButton.setClickingTogglesState(false);
     exportButton.setClickingTogglesState(false);
+    importButton.setClickingTogglesState(false);
 
     folderButton.onClick = []
     {
@@ -1330,6 +1518,7 @@ AdvancedDrawer::AdvancedDrawer()
             dir.revealToUser();
     };
     exportButton.onClick = [this] { showExport(); };
+    importButton.onClick = [this] { showImport(); };
 
     playButton.onClick = [this]
     {
@@ -1344,6 +1533,14 @@ AdvancedDrawer::AdvancedDrawer()
     {
         if (tape != nullptr)
             tape->stop();
+        timeline.viewStart = (tape != nullptr && tape->isLoop())
+                                 ? juce::jmax(0, tape->getLoopStart())
+                                 : 0;
+        timeline.markNav();
+        if (tape != nullptr)
+            tape->setTimelineView(timeline.pixelsPerBeat, timeline.viewStart);
+        ruler.repaint();
+        list.refresh();
     };
     recordButton.onClick = [this]
     {
@@ -1388,6 +1585,11 @@ AdvancedDrawer::AdvancedDrawer()
 
     ruler.setTimeline(&timeline);
     ruler.onChanged = [this] { notifyChanged(); };
+    ruler.onSeek = [this]
+    {
+        if (onAutomationEdited != nullptr)
+            onAutomationEdited();
+    };
     ruler.onViewChanged = [this]
     {
         if (tape != nullptr)
@@ -1397,6 +1599,17 @@ AdvancedDrawer::AdvancedDrawer()
     };
 
     list.setTimeline(&timeline);
+    list.getLiveStamp = [this]
+    {
+        return getLiveStamp != nullptr ? getLiveStamp() : VocalStamp {};
+    };
+    list.onAutomationEdited = [this]
+    {
+        notifyChanged();
+        if (onAutomationEdited != nullptr)
+            onAutomationEdited();
+    };
+    list.onLayoutChanged = [this] { relayoutList(); };
     list.onChanged = [this] { notifyChanged(); };
     list.onViewChanged = [this]
     {
@@ -1432,6 +1645,7 @@ AdvancedDrawer::AdvancedDrawer()
     addAndMakeVisible(loopButton);
     addAndMakeVisible(folderButton);
     addAndMakeVisible(exportButton);
+    addAndMakeVisible(importButton);
     addAndMakeVisible(ruler);
     addAndMakeVisible(viewport);
     addAndMakeVisible(metroButton);
@@ -1484,7 +1698,7 @@ void AdvancedDrawer::refresh()
         if (tape->takeDirty())
             notifyChanged();
         const int selected = list.getSelectedLane();
-        if (selected >= 0 && ! tape->hasClip(selected))
+        if (selected >= 0 && ! tape->hasClip(selected) && ! tape->laneAutomated(selected))
             list.setSelectedLane(-1);
     }
     syncTimeline();
@@ -1575,14 +1789,20 @@ void AdvancedDrawer::resized()
     place(loopButton);
     place(folderButton);
     place(exportButton);
+    place(importButton);
 
-    bounds.removeFromTop(10);
-    ruler.setBounds(bounds.removeFromTop(22));
+    bounds.removeFromTop(6);
+    ruler.setBounds(bounds.removeFromTop(26));
     bounds.removeFromTop(4);
     viewport.setBounds(bounds);
-    const int contentH = TapeEngine::numLanes * (laneH + laneGap) - laneGap;
-    list.setSize(juce::jmax(1, viewport.getMaximumVisibleWidth() - 4), contentH);
+    relayoutList();
     syncTimeline();
+}
+
+void AdvancedDrawer::relayoutList()
+{
+    const int contentH = juce::jmax(1, list.contentHeight());
+    list.setSize(juce::jmax(1, viewport.getMaximumVisibleWidth() - 4), contentH);
 }
 
 void AdvancedDrawer::showExport()
@@ -1598,6 +1818,49 @@ void AdvancedDrawer::showExport()
     auto panel = std::make_unique<TapeExportPanel>(*tape);
     panel->setSize(340, 196);
     WindowShell::launchDialog("Export tape", std::move(panel), 340, 196, false, &getLookAndFeel());
+}
+
+void AdvancedDrawer::showImport()
+{
+    if (tape == nullptr)
+        return;
+    if (tape->isRecording())
+    {
+        WindowShell::showAlert("Import", "Stop recording first.", &getLookAndFeel());
+        return;
+    }
+
+    const int lane = tape->getArmedLane();
+    if (tape->hasClip(lane))
+    {
+        WindowShell::showAlert("Import", "Current track already has a clip. Arm an empty track first.",
+                               &getLookAndFeel());
+        return;
+    }
+
+    auto chooser = std::make_shared<juce::FileChooser>("Import to current track",
+                                                       juce::File(),
+                                                       "*.wav;*.mp3");
+    const auto chooserFlags = juce::FileBrowserComponent::openMode
+                              | juce::FileBrowserComponent::canSelectFiles;
+    chooser->launchAsync(chooserFlags, [this, chooser, lane](const juce::FileChooser& picked)
+    {
+        const auto file = picked.getResult();
+        if (file == juce::File() || tape == nullptr)
+            return;
+        juce::String error;
+        if (! tape->importToLane(lane, file, error))
+        {
+            WindowShell::showAlert("Import", error, &getLookAndFeel());
+            return;
+        }
+        list.setSelectedLane(lane);
+        notifyChanged();
+        if (onSelectLane != nullptr)
+            onSelectLane(lane);
+        list.refresh();
+        ruler.repaint();
+    });
 }
 
 void AdvancedDrawer::applyWheel(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel, float waveX)

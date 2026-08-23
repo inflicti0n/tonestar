@@ -1,4 +1,5 @@
 #include "Looper/LooperDrawer.h"
+#include "Appearance/DragTip.h"
 #include "Appearance/Theme.h"
 
 namespace
@@ -10,6 +11,7 @@ namespace
 LooperDrawer::PhraseStrip::PhraseStrip(int indexToUse)
     : index(indexToUse)
 {
+    setPaintingIsUnclipped(true);
     setMouseCursor(juce::MouseCursor::PointingHandCursor);
 }
 
@@ -150,6 +152,7 @@ void LooperDrawer::PhraseStrip::setLevelFromY(float y)
     level = juce::jlimit(0.0f, 1.0f, (levelBounds.getBottom() - y) / levelBounds.getHeight());
     if (onLevel != nullptr)
         onLevel(index, level);
+    DragTip::show(*this, thumbBounds().getCentre(), DragTip::percent(level), Theme::starlight());
     repaint();
 }
 
@@ -201,6 +204,8 @@ void LooperDrawer::PhraseStrip::mouseUp(const juce::MouseEvent&)
     if (draggingLevel)
     {
         draggingLevel = false;
+        DragTip::hide();
+        repaint();
         return;
     }
 

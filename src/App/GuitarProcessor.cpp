@@ -375,8 +375,10 @@ void GuitarProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         if (dry == nullptr)
             continue;
 
-        const bool followLive = vocals && (listen < 0 || listen == i);
-        const VocalStamp stamp = followLive ? live : tape.getVocalStamp(i);
+        const bool automated = tape.laneAutomated(i);
+        const bool followLive = vocals && (listen < 0 || listen == i) && ! automated;
+        const VocalStamp stamp = automated ? tape.getThroughStamp(i)
+                                           : (followLive ? live : tape.getVocalStamp(i));
         vocalScratch.clear();
         vocalScratch.copyFrom(0, 0, dry, numSamples);
         vocalScratch.applyGain(inGain);

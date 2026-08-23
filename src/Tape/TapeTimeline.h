@@ -8,7 +8,7 @@ struct TapeTimeline
     static constexpr float minPx = 8.0f;
     static constexpr float maxPx = 240.0f;
     static constexpr float defaultPx = 48.0f;
-    static constexpr int waveLeft = 130;
+    static constexpr int waveLeft = 168;
 
     float pixelsPerBeat = defaultPx;
     int viewStart = 0;
@@ -69,6 +69,13 @@ struct TapeTimeline
     void panSamples(int delta)
     {
         viewStart = juce::jmax(0, viewStart - delta);
+        markNav();
+    }
+
+    void panByDrag(int startView, float startX, float nowX, float waveX)
+    {
+        const int delta = xToSample(startX, waveX) - xToSample(nowX, waveX);
+        viewStart = juce::jmax(0, startView + delta);
         markNav();
     }
 

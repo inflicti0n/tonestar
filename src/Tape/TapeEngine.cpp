@@ -100,8 +100,11 @@ void TapeEngine::stopRecord() { post(Cmd::RecStop); }
 
 void TapeEngine::setPlayhead(int sample)
 {
-    seekSample.store(juce::jmax(0, sample), std::memory_order_release);
+    sample = juce::jmax(0, sample);
+    seekSample.store(sample, std::memory_order_release);
     hasSeek.store(true, std::memory_order_release);
+    if (! isRecording())
+        playheadPub.store(sample, std::memory_order_relaxed);
 }
 
 void TapeEngine::setTimelineView(float px, int start)
@@ -246,8 +249,21 @@ VocalStamp TapeEngine::getVocalStamp(int lane) const
 
 bool TapeEngine::laneThrough(const Lane& lane) const
 {
-    return lane.throughChain.load(std::memory_order_relaxed) != 0
-        || lane.vocalSlug.isNotEmpty();
+    return lane.throughChain.load(std::memory_order_relaxed) != 0;
+}
+
+void TapeEngine::setProcess(int lane, bool shouldProcess)
+{
+    if (! valid(lane) || lanes[lane].vocalSlug.isEmpty())
+        return;
+
+    lanes[lane].throughChain.store(shouldProcess ? 1 : 0, std::memory_order_relaxed);
+    metaDirty.store(true, std::memory_order_relaxed);
+}
+
+bool TapeEngine::isProcess(int lane) const
+{
+    return valid(lane) && lanes[lane].throughChain.load(std::memory_order_relaxed) != 0;
 }
 
 bool TapeEngine::isThroughChain(int lane) const
@@ -257,7 +273,7 @@ bool TapeEngine::isThroughChain(int lane) const
 
 bool TapeEngine::isVocalLane(int lane) const
 {
-    return isThroughChain(lane);
+    return valid(lane) && lanes[lane].vocalSlug.isNotEmpty();
 }
 
 bool TapeEngine::hasThrough(int lane) const
@@ -270,6 +286,27 @@ const float* TapeEngine::getThroughDry(int lane) const
     if (! hasThrough(lane) || throughDry[lane].getNumSamples() <= 0)
         return nullptr;
     return throughDry[lane].getReadPointer(0);
+}
+
+bool TapeEngine::laneAutomated(int lane) const
+{
+    return valid(lane) && automation.automated(lane);
+}
+
+VocalStamp TapeEngine::getThroughStamp(int lane) const
+{
+    if (! valid(lane))
+        return {};
+    return throughStamp[(size_t) lane];
+}
+
+VocalStamp TapeEngine::stampAt(int lane, int sample) const
+{
+    if (! valid(lane))
+        return {};
+    if (automation.automated(lane))
+        return automation.evaluateUi(lane, sample);
+    return readStamp(lanes[lane]);
 }
 
 void TapeEngine::setMute(int lane, bool shouldMute)
@@ -363,11 +400,109 @@ void TapeEngine::clearLane(int lane)
     l.throughChain.store(0, std::memory_order_relaxed);
     l.vocalSlug.clear();
     applyStamp(l, {});
+    automation.clear(lane);
     const auto file = laneFile(lane);
     if (file.existsAsFile())
         file.deleteFile();
     metaDirty.store(true, std::memory_order_relaxed);
     audioDirty.store(true, std::memory_order_relaxed);
+}
+
+bool TapeEngine::importToLane(int lane, const juce::File& file, juce::String& error)
+{
+    if (! valid(lane))
+    {
+        error = "No track selected.";
+        return false;
+    }
+    if (isRecording())
+    {
+        error = "Stop recording first.";
+        return false;
+    }
+    if (hasClip(lane))
+    {
+        error = "Current track already has a clip.";
+        return false;
+    }
+
+    juce::AudioFormatManager formats;
+    formats.registerBasicFormats();
+    formats.registerFormat(new juce::MP3AudioFormat(), false);
+
+    std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
+    if (reader == nullptr || reader->lengthInSamples <= 0)
+    {
+        error = "Could not read that file.";
+        return false;
+    }
+
+    const double destSr = sampleRate > 0.0 ? sampleRate : 48000.0;
+    const double srcSr = reader->sampleRate > 0.0 ? reader->sampleRate : destSr;
+    const int cap = maxSamples > 0 ? maxSamples : (int) std::lround(destSr * maxSeconds);
+    const int srcFrames = (int) juce::jmin(reader->lengthInSamples, (juce::int64) cap * 4);
+    juce::AudioBuffer<float> source(2, juce::jmax(1, srcFrames));
+    source.clear();
+    reader->read(&source, 0, srcFrames, 0, true, true);
+
+    int destFrames = srcFrames;
+    if (std::abs(srcSr - destSr) > 0.5)
+        destFrames = juce::jmax(1, (int) std::lround((double) srcFrames * destSr / srcSr));
+    destFrames = juce::jmin(destFrames, cap);
+
+    ensureLane(lane);
+    auto& l = lanes[lane];
+    l.audio.setSize(2, juce::jmax(destFrames, cap), false, true, false);
+    l.audio.clear();
+
+    if (std::abs(srcSr - destSr) <= 0.5)
+    {
+        const int n = juce::jmin(destFrames, srcFrames);
+        for (int ch = 0; ch < 2; ++ch)
+            l.audio.copyFrom(ch, 0, source, ch, 0, n);
+    }
+    else
+    {
+        const double speed = srcSr / destSr;
+        for (int ch = 0; ch < 2; ++ch)
+        {
+            juce::Interpolators::WindowedSinc sinc;
+            sinc.reset();
+            sinc.process(speed, source.getReadPointer(ch), l.audio.getWritePointer(ch),
+                         destFrames, srcFrames, 0);
+        }
+    }
+
+    const int hopsN = juce::jlimit(0, maxHops, (destFrames + hop - 1) / hop);
+    std::fill(std::begin(l.hops), std::end(l.hops), 0.0f);
+    for (int h = 0; h < hopsN; ++h)
+    {
+        const int i0 = h * hop;
+        const int i1 = juce::jmin(destFrames, i0 + hop);
+        float peak = 0.0f;
+        for (int s = i0; s < i1; ++s)
+            peak = juce::jmax(peak, std::abs(l.audio.getSample(0, s)),
+                              std::abs(l.audio.getSample(1, s)));
+        l.hops[h] = peak;
+    }
+
+    const auto name = file.getFileNameWithoutExtension().trim();
+    if (name.isNotEmpty())
+        l.name = name;
+
+    applyStamp(l, readLiveStamp());
+    l.vocalSlug = ToneSlug::encodeVocal(readStamp(l));
+    l.throughChain.store(1, std::memory_order_relaxed);
+    l.fileFrames.store(destFrames, std::memory_order_relaxed);
+    l.in.store(0, std::memory_order_relaxed);
+    l.end.store(destFrames, std::memory_order_relaxed);
+    l.start.store(snapSample(getPlayhead()), std::memory_order_relaxed);
+    l.hopCount.store(hopsN, std::memory_order_relaxed);
+    l.hasClip.store(1, std::memory_order_relaxed);
+    metaDirty.store(true, std::memory_order_relaxed);
+    audioDirty.store(true, std::memory_order_relaxed);
+    saveSession();
+    return true;
 }
 
 bool TapeEngine::isRecording() const
@@ -477,7 +612,7 @@ bool TapeEngine::exportMix(const juce::File& dest, double startSeconds, double l
                 if (! any)
                     continue;
 
-                throughRender(readStamp(lane), dry, bpm);
+                throughRender(stampAt(i, start + done), dry, bpm);
                 const float gain = lane.level.load(std::memory_order_relaxed);
                 const float angle = (lane.pan.load(std::memory_order_relaxed) + 1.0f)
                                     * (juce::MathConstants<float>::halfPi * 0.5f);
@@ -530,7 +665,8 @@ int TapeEngine::snapSample(int sample) const
     const int beat = beatSamples.load(std::memory_order_relaxed);
     if (! quantize.load(std::memory_order_relaxed) || beat <= 0)
         return juce::jmax(0, sample);
-    return juce::jmax(0, (int) std::lround((double) sample / (double) beat) * beat);
+    const int grid = pixelsPerBeat >= 24.0f ? juce::jmax(1, beat / 2) : beat;
+    return juce::jmax(0, (int) std::lround((double) sample / (double) grid) * grid);
 }
 
 juce::String TapeEngine::getName(int lane) const
@@ -641,6 +777,14 @@ void TapeEngine::process(juce::AudioBuffer<float>& stereo, int numSamples,
 
     if (hasSeek.exchange(false, std::memory_order_acq_rel) && transport != Transport::Recording)
         playhead = juce::jmax(0, seekSample.load(std::memory_order_relaxed));
+
+    for (int i = 0; i < numLanes; ++i)
+    {
+        throughStamp[(size_t) i] = {};
+        VocalStamp evaluated;
+        if (automation.evaluate(i, playhead, evaluated))
+            throughStamp[(size_t) i] = evaluated;
+    }
 
     auto* left = stereo.getWritePointer(0);
     auto* right = stereo.getWritePointer(1);
@@ -814,7 +958,9 @@ void TapeEngine::apply(Cmd cmd)
             if (transport == Transport::Recording)
                 finishRecord();
             transport = Transport::Stopped;
-            playhead = 0;
+            playhead = loopOn.load(std::memory_order_relaxed)
+                           ? juce::jmax(0, loopStart.load(std::memory_order_relaxed))
+                           : 0;
             closeOnBeat = false;
             break;
 
@@ -978,6 +1124,7 @@ void TapeEngine::loadSession()
         lane.throughChain.store(0, std::memory_order_relaxed);
         lane.vocalSlug.clear();
         applyStamp(lane, {});
+        automation.clear(i);
         std::fill(std::begin(lane.hops), std::end(lane.hops), 0.0f);
 
         if (xml != nullptr)
@@ -1006,6 +1153,7 @@ void TapeEngine::loadSession()
                     applyStamp(lane, stamp);
                     lane.vocalSlug = ToneSlug::encodeVocal(stamp);
                 }
+                automation.loadFrom(*node, i);
             }
         }
 
@@ -1082,12 +1230,9 @@ void TapeEngine::saveSession()
         node->setAttribute("level", (double) lane.level.load(std::memory_order_relaxed));
         node->setAttribute("pan", (double) lane.pan.load(std::memory_order_relaxed));
         node->setAttribute("throughChain", lane.throughChain.load(std::memory_order_relaxed) != 0 ? 1 : 0);
-        if (lane.throughChain.load(std::memory_order_relaxed) != 0)
-        {
-            if (lane.vocalSlug.isEmpty())
-                lane.vocalSlug = ToneSlug::encodeVocal(readStamp(lane));
+        if (lane.vocalSlug.isNotEmpty())
             node->setAttribute("slug", lane.vocalSlug);
-        }
+        automation.saveTo(*node, i);
 
         if (! writeAudio)
             continue;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Appearance/DragTip.h"
 #include "Appearance/Theme.h"
 
 #include <cmath>
@@ -82,8 +83,6 @@ public:
         g.setColour(line);
         g.drawText(modeName(), title, juce::Justification::centred, false);
 
-        if (dragging)
-            paintDragTip(g, line);
     }
 
     void mouseDown(const juce::MouseEvent& e) override
@@ -111,6 +110,7 @@ public:
 
         beginAxisAnchor(e.position);
         applyAxisLock(e);
+        showDragTip();
         repaint();
     }
 
@@ -128,6 +128,7 @@ public:
         shiftWasDown = false;
         axisLock = AxisLock::None;
         grabOffset = {};
+        DragTip::hide();
         repaint();
     }
 
@@ -190,60 +191,12 @@ private:
         return { c.x - 6.0f, c.y - 6.0f, 12.0f, 12.0f };
     }
 
-    static juce::String signedValue(float value)
+    void showDragTip()
     {
-        const auto text = juce::String(value, 2);
-        if (value > -0.005f && ! text.startsWithChar('-'))
-            return "+" + text;
-        return text;
-    }
-
-    void paintDragTip(juce::Graphics& g, juce::Colour line) const
-    {
-        const auto pitchText = "Pitch  " + signedValue(pitch);
-        const auto formantText = "Formant  " + signedValue(formant);
-
-        juce::Font type { juce::FontOptions(11.0f, juce::Font::bold) };
-        if (auto* laf = dynamic_cast<Theme*>(&getLookAndFeel()))
-            type = laf->font(11.0f, true);
-        g.setFont(type);
-
-        auto textWidth = [] (const juce::Font& font, const juce::String& text)
-        {
-            juce::GlyphArrangement ga;
-            ga.addLineOfText(font, text, 0.0f, 0.0f);
-            return ga.getBoundingBox(0, ga.getNumGlyphs(), true).getWidth();
-        };
-
-        const float padX = 8.0f;
-        const float padY = 5.0f;
-        const float lineH = type.getHeight() + 1.0f;
-        const float w = juce::jmax(textWidth(type, pitchText),
-                                   textWidth(type, formantText)) + padX * 2.0f;
-        const float h = lineH * 2.0f + padY * 2.0f;
-
-        const auto puck = puckCentre();
-        auto tip = juce::Rectangle<float>(puck.x - w - 10.0f, puck.y - h * 0.5f, w, h);
-        if (auto* parent = getParentComponent())
-        {
-            const auto local = parent->getLocalArea(this, tip.toNearestInt()).toFloat();
-            if (local.getX() < 6.0f)
-                tip.setX(puck.x + 10.0f);
-            if (local.getY() < 6.0f)
-                tip.setY(puck.y + 10.0f);
-            else if (local.getBottom() > (float) parent->getHeight() - 6.0f)
-                tip.setY(puck.y - h - 10.0f);
-        }
-
-        g.setColour(Theme::voidFill().withMultipliedAlpha(0.92f));
-        g.fillRoundedRectangle(tip, 6.0f);
-        g.setColour(line.withMultipliedAlpha(0.85f));
-        g.drawRoundedRectangle(tip, 6.0f, 1.1f);
-
-        auto text = tip.reduced(padX, padY);
-        g.setColour(line);
-        g.drawText(pitchText, text.removeFromTop(lineH), juce::Justification::centredLeft, false);
-        g.drawText(formantText, text, juce::Justification::centredLeft, false);
+        juce::StringArray lines;
+        lines.add("Pitch  " + DragTip::signedFixed(pitch));
+        lines.add("Formant  " + DragTip::signedFixed(formant));
+        DragTip::show(*this, puckCentre(), lines, modeColour());
     }
 
     enum class AxisLock { None, Pending, Horz, Vert };
@@ -327,6 +280,8 @@ private:
     {
         if (onChange != nullptr)
             onChange();
+        if (dragging)
+            showDragTip();
         repaint();
     }
 

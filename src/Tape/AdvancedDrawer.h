@@ -1,16 +1,19 @@
 #pragma once
 
+#include "Automation/AutomationView.h"
 #include "Tape/TapeEngine.h"
 #include "Tape/TapeTimeline.h"
 #include "Appearance/TitleBar.h"
 #include "Visuals/Tuner.h"
+#include "Vocals/VocalCompose.h"
 
 #include <functional>
 
 class AdvancedDrawer : public juce::Component
 {
 public:
-    static constexpr int width = 228 * 3;
+    static constexpr int width = 780;
+    static constexpr int extraHeight = 96;
 
     AdvancedDrawer();
 
@@ -38,6 +41,7 @@ public:
     CircleToggle loopButton { "Loop", Theme::nova(), CircleIcon::Loop };
     CircleToggle folderButton { "Tape", Theme::panel(), CircleIcon::Folder };
     CircleToggle exportButton { "Export", Theme::panel(), CircleIcon::Export };
+    CircleToggle importButton { "Import to current track", Theme::panel(), CircleIcon::Import };
     CircleToggle metroButton { "Metronome", Theme::nova(), CircleIcon::Metro };
     CircleToggle tunerButton { "Tuner", Theme::nova(), CircleIcon::Tune };
 
@@ -45,7 +49,10 @@ public:
     std::function<void()> onChanged;
     std::function<void(bool)> onQuantizeChange;
     std::function<void(int)> onSelectLane;
+    std::function<VocalStamp()> getLiveStamp;
+    std::function<void()> onAutomationEdited;
     int getSelectedLane() const { return list.getSelectedLane(); }
+    void relayoutList();
 
 private:
     class BpmField : public juce::Component
@@ -114,6 +121,7 @@ private:
         void mouseDown(const juce::MouseEvent&) override;
         void mouseDrag(const juce::MouseEvent&) override;
         void mouseUp(const juce::MouseEvent&) override;
+        void mouseDoubleClick(const juce::MouseEvent&) override;
         void mouseMove(const juce::MouseEvent&) override;
         void mouseExit(const juce::MouseEvent&) override;
         void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
@@ -124,16 +132,26 @@ private:
         void refresh();
         void finishNameEdit();
         bool isEditingName() const { return editing; }
+        int rowHeight() const;
+        void setExpanded(bool shouldExpand);
+        bool isExpanded() const { return expanded; }
 
         std::function<void()> onChanged;
         std::function<void()> onFinishOthers;
         std::function<void(int)> onSelectClip;
         std::function<void(int)> onDeleteClip;
         std::function<void()> onViewChanged;
+        std::function<void()> onLayoutChanged;
+        std::function<VocalStamp()> getLiveStamp;
+        std::function<void()> onAutomationEdited;
 
     private:
-        enum class Drag { None, Move, Trim, TrimIn };
+        enum class Drag { None, Move, Trim, TrimIn, ViewPan };
 
+        void beginViewPan(float x);
+        void applyViewPan(float x);
+
+        juce::Rectangle<int> laneBounds() const;
         juce::Rectangle<float> waveBounds() const;
         juce::Rectangle<float> nameBounds() const;
         juce::Rectangle<float> levelBounds() const;
@@ -144,7 +162,7 @@ private:
         juce::Rectangle<float> deleteBoundsFor(juce::Rectangle<float> clip) const;
         bool inLevel(juce::Point<float> p) const;
         bool inPan(juce::Point<float> p) const;
-        void setLevelFromY(float y);
+        void setLevelFromX(float x);
         void setPanFromX(float x);
         void startNameEdit();
         void drawWave(juce::Graphics& g, juce::Rectangle<float> clip, const TapeEngine::LaneView& view,
@@ -153,16 +171,19 @@ private:
         int index = 0;
         TapeEngine* tape = nullptr;
         TapeTimeline* timeline = nullptr;
-        CircleToggle muteButton { "Mute", Theme::flare(), CircleIcon::Mute };
+        AutomationView autoView;
+        PieToggle pie;
         juce::TextEditor editor;
         bool editing = false;
         bool selected = false;
+        bool expanded = false;
         bool deleteHot = false;
         bool draggingLevel = false;
         bool draggingPan = false;
         Drag drag = Drag::None;
         int dragStartValue = 0;
         int dragStartX = 0;
+        int viewPanStart = 0;
         juce::Rectangle<float> deleteBounds;
     };
 
@@ -174,17 +195,23 @@ private:
         void setTimeline(TapeTimeline* timelineToUse);
         void refresh();
         void resized() override;
+        void mouseWheelMove(const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
         void finishEdits();
         bool isEditingName() const;
         void setSelectedLane(int lane);
         int getSelectedLane() const { return selectedLane; }
+        int contentHeight() const;
         std::function<void()> onChanged;
         std::function<void(int)> onSelectClip;
         std::function<void(int)> onDeleteClip;
         std::function<void()> onViewChanged;
+        std::function<void()> onLayoutChanged;
+        std::function<VocalStamp()> getLiveStamp;
+        std::function<void()> onAutomationEdited;
 
     private:
         juce::OwnedArray<LaneRow> rows;
+        TapeTimeline* timeline = nullptr;
         int selectedLane = -1;
     };
 
@@ -204,11 +231,13 @@ private:
 
         std::function<void()> onViewChanged;
         std::function<void()> onChanged;
+        std::function<void()> onSeek;
 
     private:
         enum class Drag { None, Handle, LoopStart, LoopEnd, LoopMove, Pan };
 
         juce::Rectangle<float> handleBounds() const;
+        juce::Path handlePath() const;
         juce::Rectangle<float> loopBar() const;
         juce::Rectangle<float> loopEdge(bool right) const;
         void seekTo(float x);
@@ -227,6 +256,7 @@ private:
     void applyWheel(const juce::MouseEvent&, const juce::MouseWheelDetails&, float waveX);
     void syncTimeline();
     void showExport();
+    void showImport();
 
     TapeEngine* tape = nullptr;
     TapeTimeline timeline;

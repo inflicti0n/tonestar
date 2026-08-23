@@ -61,6 +61,18 @@ inline const char* vocalAxisName(int index)
     return names[juce::jlimit(0, 4, index)];
 }
 
+inline const char* vocalAxisTip(int index)
+{
+    static constexpr const char* tips[] = {
+        "rasp and dirt. saturates the voice so it sounds worn and loud",
+        "squashes the vocal flat. even, close, and in your face",
+        "cuts rumble and the air between words. drier and closer",
+        "pushes the words forward. more presence and air, less mud",
+        "rounds the chest. more body and low-mid, less ice on top"
+    };
+    return tips[juce::jlimit(0, 4, index)];
+}
+
 inline const char* vocalFxName(int index)
 {
     static constexpr const char* names[] = { "Tune", "Double", "Echo", "Bloom", "Stack", "Phone" };

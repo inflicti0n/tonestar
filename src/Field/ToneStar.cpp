@@ -1,4 +1,5 @@
 #include "Field/ToneStar.h"
+#include "Appearance/DragTip.h"
 #include "Vocals/VocalCompose.h"
 
 const char* ToneStar::axisName(int index) const
@@ -26,6 +27,7 @@ ToneStar::ToneStar()
     : vblank(this, [this] { tick(); })
 {
     setOpaque(false);
+    setPaintingIsUnclipped(true);
 }
 
 void ToneStar::resized()
@@ -208,6 +210,8 @@ void ToneStar::setAxisFromEvent(const juce::MouseEvent& e)
     display[(size_t) dragAxis] = value;
     if (onChange != nullptr)
         onChange();
+    DragTip::show(*this, spokePoint(dragAxis, display[(size_t) dragAxis]),
+                  DragTip::percent(display[(size_t) dragAxis]), Theme::rose());
     repaint();
 }
 
@@ -226,6 +230,8 @@ void ToneStar::mouseDrag(const juce::MouseEvent& e)
 void ToneStar::mouseUp(const juce::MouseEvent&)
 {
     dragAxis = -1;
+    DragTip::hide();
+    repaint();
 }
 
 void ToneStar::mouseMove(const juce::MouseEvent& e)

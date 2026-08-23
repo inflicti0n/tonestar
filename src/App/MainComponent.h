@@ -58,6 +58,8 @@ private:
     void restoreField();
     void writeSelectedVocalSlug();
     void onSelectLane(int lane);
+    void followAutomationUi(bool force);
+    int followAutomationLane();
     int mainColumnHeight() const;
     void flashSlugError();
     void showCurrentSlug();
@@ -120,6 +122,9 @@ private:
     bool applyingWindowSize = false;
     bool spacePedalDown = false;
     bool wasTapeRecording = false;
+    bool applyingAutomation = false;
+    int lastAutoPlayhead = -1;
+    int lastAutoLane = -1;
     bool selfTesting = false;
     bool audioStartedOk = false;
     DebugLog debugLog;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Automation/AutomationBank.h"
 #include "Vocals/VocalCompose.h"
 
 #include <juce_audio_formats/juce_audio_formats.h>
@@ -44,6 +45,11 @@ public:
     bool isVocalLane(int lane) const;
     bool hasThrough(int lane) const;
     const float* getThroughDry(int lane) const;
+    bool laneAutomated(int lane) const;
+    VocalStamp getThroughStamp(int lane) const;
+    VocalStamp stampAt(int lane, int sample) const;
+    AutomationBank& getAutomation() { return automation; }
+    const AutomationBank& getAutomation() const { return automation; }
 
     using ThroughRender = std::function<void(const VocalStamp&, juce::AudioBuffer<float>&, float bpm)>;
     void setThroughRender(ThroughRender fn) { throughRender = std::move(fn); }
@@ -63,6 +69,9 @@ public:
     void trimLeft(int lane, int newTimelineStart);
     void setQuantize(bool shouldQuantize);
     void clearLane(int lane);
+    void setProcess(int lane, bool shouldProcess);
+    bool isProcess(int lane) const;
+    bool importToLane(int lane, const juce::File& file, juce::String& error);
     void setPlayhead(int sample);
     void setTimelineView(float pixelsPerBeat, int viewStart);
     void setLoop(bool shouldLoop);
@@ -164,7 +173,9 @@ private:
     Lane lanes[numLanes];
     juce::AudioBuffer<float> guitar;
     juce::AudioBuffer<float> throughDry[numLanes];
+    VocalStamp throughStamp[numLanes] {};
     std::array<int, numLanes> throughActive {};
+    AutomationBank automation;
     ThroughRender throughRender;
     std::array<std::atomic<float>, 5> liveAxes {};
     std::array<std::atomic<float>, 6> liveFx {};

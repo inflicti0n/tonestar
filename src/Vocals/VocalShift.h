@@ -12,11 +12,11 @@ public:
     void prepare(double sr, int block)
     {
         sampleRate = sr > 0.0 ? sr : 48000.0;
-        const int n = nextPow2(juce::jmax(block * 4, 2048, (int) (sampleRate * 0.12)));
+        const int n = nextPow2(juce::jmax(block * 4, 2048, (int) (sampleRate * 0.16)));
         delay.assign((size_t) n, 0.0f);
         mask = n - 1;
         writePos = 0;
-        latency = 0.020f * (float) sampleRate;
+        latency = 0.040f * (float) sampleRate;
 
         winSize = juce::jmax(128, ((int) (sampleRate * 0.050) / 2) * 2);
         hopSize = juce::jmax(64, (int) (sampleRate * 0.012));
@@ -46,6 +46,7 @@ public:
         grain[0] = {};
         grain[1] = {};
         wet = 0.0f;
+        ratioSmoothed = 1.0f;
     }
 
     void process(float* x, int n, float pitchSt, float formantSt, int mode)
@@ -71,7 +72,9 @@ public:
         const float pitchOff = std::pow(2.0f, pitchSt / 12.0f);
         const float maxD = (float) juce::jmin(mask - 4, (int) (sampleRate * 0.08));
         const float wetC = 1.0f - std::exp(-1.0f / (0.006f * sr));
+        const float ratioC = 1.0f - std::exp(-1.0f / (0.0065f * sr));
         const float defaultPeriod = sr / 200.0f;
+        const float hopMax = juce::jmin(0.020f * sr, latency * 0.5f);
 
         for (int i = 0; i < n; ++i)
         {
@@ -79,32 +82,40 @@ public:
             pushSample(dry);
             delay[(size_t) (writePos & mask)] = dry;
 
-            float pitchRatio = pitchOff;
-            bool voiced = confident && detectedHz > 55.0f;
+            float targetRatio = pitchOff;
+            const bool voiced = confident && detectedHz > 55.0f;
             if (voiced)
             {
                 if (mode == Quantize)
                 {
                     const float target = snapChromatic(detectedHz) * pitchOff;
-                    pitchRatio = juce::jlimit(0.50f, 2.00f, target / detectedHz);
+                    targetRatio = juce::jlimit(0.50f, 2.00f, target / detectedHz);
                 }
                 else if (mode == Robot)
                 {
                     const float target = kRobotHz * pitchOff;
-                    pitchRatio = juce::jlimit(0.50f, 2.00f, target / detectedHz);
+                    targetRatio = juce::jlimit(0.50f, 2.00f, target / detectedHz);
                 }
                 else
                 {
-                    pitchRatio = juce::jlimit(0.50f, 2.00f, pitchOff);
+                    targetRatio = juce::jlimit(0.50f, 2.00f, pitchOff);
                 }
             }
             else if (mode != Transpose)
             {
-                pitchRatio = 1.0f;
+                targetRatio = 1.0f;
+            }
+            else
+            {
+                targetRatio = juce::jlimit(0.50f, 2.00f, pitchOff);
             }
 
+            ratioSmoothed += ratioC * (targetRatio - ratioSmoothed);
+            ratioSmoothed = juce::jlimit(0.50f, 2.00f, ratioSmoothed);
+            const float pitchRatio = ratioSmoothed;
+
             const float period = voiced ? sr / detectedHz : defaultPeriod;
-            const float hop = juce::jlimit(32.0f, 0.040f * sr, period / juce::jmax(pitchRatio, 0.50f));
+            const float hop = juce::jlimit(32.0f, hopMax, period / juce::jmax(pitchRatio, 0.50f));
             const float len = hop * 2.0f;
             const bool run = voiced || mode == Transpose;
 
@@ -112,7 +123,7 @@ public:
             {
                 if (! grain[0].on && ! grain[1].on)
                 {
-                    startGrain(0, hop, len, formantRatio, maxD);
+                    startGrain(0, hop, len, pitchRatio, formantRatio, maxD);
                     hopCount = 0.0f;
                 }
 
@@ -120,7 +131,7 @@ public:
                 if (hopCount >= grainHop && (! grain[0].on || ! grain[1].on))
                 {
                     hopCount = 0.0f;
-                    startGrain(pickSlot(), hop, len, formantRatio, maxD);
+                    startGrain(pickSlot(), hop, len, pitchRatio, formantRatio, maxD);
                 }
             }
 
@@ -130,9 +141,14 @@ public:
             {
                 if (! g.on)
                     continue;
-                const float w = hann(g.k / juce::jmax(g.len, 1.0f));
-                const float d = g.delay0 + g.k * (1.0f - g.formant);
-                out += w * readBehind(d);
+                const float phase = g.k / juce::jmax(g.len, 1.0f);
+                const float w = hann(phase);
+                const float r = g.pitch;
+                const float formantCorrect = juce::jlimit(0.50f, 2.00f,
+                                                          g.formant / juce::jmax(r, 0.50f));
+                float d = g.delay0 - (r - 1.0f) * phase * g.len;
+                d += g.k * (1.0f - formantCorrect);
+                out += w * readBehind(juce::jlimit(1.0f, maxD, d));
                 wSum += w;
                 g.k += 1.0f;
                 if (g.k >= g.len)
@@ -186,7 +202,7 @@ private:
         return delay[(size_t) i0] + (delay[(size_t) i1] - delay[(size_t) i0]) * frac;
     }
 
-    void startGrain(int slot, float hop, float len, float formant, float maxD)
+    void startGrain(int slot, float hop, float len, float pitch, float formant, float maxD)
     {
         grainHop = hop;
         auto& g = grain[slot == 0 ? 0 : 1];
@@ -194,7 +210,8 @@ private:
         g.k = 0.0f;
         g.len = len;
         g.delay0 = juce::jlimit(1.0f, maxD, latency);
-        g.formant = formant;
+        g.pitch = juce::jlimit(0.50f, 2.00f, pitch);
+        g.formant = juce::jlimit(0.50f, 2.00f, formant);
     }
 
     int pickSlot() const
@@ -337,6 +354,7 @@ private:
         float k = 0.0f;
         float len = 960.0f;
         float delay0 = 960.0f;
+        float pitch = 1.0f;
         float formant = 1.0f;
     };
 
@@ -351,6 +369,7 @@ private:
     float grainHop = 480.0f;
     float hopCount = 0.0f;
     float wet = 0.0f;
+    float ratioSmoothed = 1.0f;
 
     std::vector<float> pitchWin, linear, decim, yinDiff, yinCmnd;
     int winSize = 0;

@@ -200,6 +200,8 @@ MainComponent::MainComponent()
     };
     advanced.setTape(&processor.getTape());
     advanced.onSelectLane = [this](int lane) { onSelectLane(lane); };
+    advanced.getLiveStamp = [this] { return currentVocalStamp(); };
+    advanced.onAutomationEdited = [this] { followAutomationUi(true); };
     advanced.onChanged = [this] { markDirty(); };
     advanced.onQuantizeChange = [this](bool)
     {
@@ -472,6 +474,7 @@ void MainComponent::loadSettings()
     processor.getLooper().setLevel(0, (float) settings.getDoubleValue("looperLevel0", 1.0));
     processor.getLooper().setLevel(1, (float) settings.getDoubleValue("looperLevel1", 1.0));
     processor.getTape().loadSession();
+    advanced.refresh();
     advanced.setQuantize(settings.getBoolValue("tapeQuantize", processor.getTape().isQuantize()), false);
 
     const float bpm = (float) settings.getDoubleValue("metroBpm", 120.0);
@@ -680,11 +683,13 @@ void MainComponent::runSelfTest()
           juce::String(baseW) + "x" + juce::String(baseH));
 
     titleBar.advancedButton.setToggleState(true, juce::sendNotification);
-    check("advanced-open", advanced.isVisible() && windowWidth() == 520 + AdvancedDrawer::width,
+    check("advanced-open", advanced.isVisible()
+          && windowWidth() == 520 + AdvancedDrawer::width
+          && windowHeight() == 920 + AdvancedDrawer::extraHeight,
           juce::String(windowWidth()) + "x" + juce::String(windowHeight()));
     titleBar.advancedButton.setToggleState(false, juce::sendNotification);
-    check("advanced-close", ! advanced.isVisible() && windowWidth() == 520,
-          juce::String(windowWidth()));
+    check("advanced-close", ! advanced.isVisible() && windowWidth() == 520 && windowHeight() == 920,
+          juce::String(windowWidth()) + "x" + juce::String(windowHeight()));
 
     titleBar.presetsButton.setToggleState(true, juce::sendNotification);
     check("presets-open", drawer.isVisible() && windowWidth() == 520 + PresetDrawer::width,
@@ -765,9 +770,10 @@ void MainComponent::applyWindowSize()
     const int rightW = pre ? PresetDrawer::width : 0;
     const int tuneW = tune ? PlasmaTune::width : 0;
     const int loopH = loop ? looperDrawer.height() : 0;
+    const int advH = adv ? AdvancedDrawer::extraHeight : 0;
     const int columnH = mainColumnHeight();
     const int w = 520 + leftW + rightW + tuneW;
-    const int h = columnH + loopH;
+    const int h = columnH + loopH + advH;
 
     if (auto* top = getTopLevelComponent())
     {
@@ -963,7 +969,7 @@ void MainComponent::refreshDiscordPresence(bool immediate)
 
 void MainComponent::writeSelectedVocalSlug()
 {
-    if (field.getRigMode() != RigMode::Vocals)
+    if (applyingAutomation || field.getRigMode() != RigMode::Vocals)
         return;
 
     auto& tape = processor.getTape();
@@ -976,22 +982,76 @@ void MainComponent::writeSelectedVocalSlug()
         && ! (tape.isRecording() && tape.getRecLane() == lane))
         return;
 
+    if (tape.laneAutomated(lane))
+    {
+        tape.getAutomation().track(lane).writeIfAtKey(tape.getPlayhead(), currentVocalStamp());
+        return;
+    }
+
     tape.setVocalSlug(lane, currentSlug());
 }
 
 void MainComponent::onSelectLane(int lane)
 {
     processor.setListenLane(lane);
+    lastAutoLane = -1;
     if (lane < 0)
         return;
 
     auto& tape = processor.getTape();
-    if (! tape.isVocalLane(lane) || titleBar.getMode() != RigMode::Vocals)
+    if (titleBar.getMode() != RigMode::Vocals)
+        return;
+
+    if (tape.laneAutomated(lane))
+    {
+        followAutomationUi(true);
+        return;
+    }
+
+    if (! tape.isVocalLane(lane))
         return;
 
     VocalStamp stamp;
     if (ToneSlug::decodeVocal(tape.getVocalSlug(lane), stamp))
         applyVocalStamp(stamp);
+}
+
+int MainComponent::followAutomationLane()
+{
+    auto& tape = processor.getTape();
+    const int selected = advanced.getSelectedLane();
+    if (selected >= 0 && tape.laneAutomated(selected))
+        return selected;
+
+    const int armed = tape.getArmedLane();
+    if (armed >= 0 && tape.laneAutomated(armed))
+        return armed;
+
+    for (int i = 0; i < TapeEngine::numLanes; ++i)
+        if (tape.isVocalLane(i) && tape.laneAutomated(i))
+            return i;
+    return -1;
+}
+
+void MainComponent::followAutomationUi(bool force)
+{
+    if (applyingAutomation || titleBar.getMode() != RigMode::Vocals)
+        return;
+
+    auto& tape = processor.getTape();
+    const int lane = followAutomationLane();
+    if (lane < 0)
+        return;
+
+    const int head = tape.getPlayhead();
+    if (! force && head == lastAutoPlayhead && lane == lastAutoLane)
+        return;
+
+    lastAutoPlayhead = head;
+    lastAutoLane = lane;
+    applyingAutomation = true;
+    applyVocalStamp(tape.stampAt(lane, head));
+    applyingAutomation = false;
 }
 
 int MainComponent::mainColumnHeight() const
@@ -1147,16 +1207,17 @@ void MainComponent::resized()
     constexpr int mainW = 520;
     const int mainH = mainColumnHeight();
     const int leftW = advanced.isVisible() ? AdvancedDrawer::width : 0;
+    const int advH = advanced.isVisible() ? AdvancedDrawer::extraHeight : 0;
     const int tuneW = plasmaTune.isVisible() ? PlasmaTune::width : 0;
     const int loopH = looperDrawer.isVisible() ? looperDrawer.height() : 0;
     titleBar.setBounds(0, 0, getWidth(), TitleBar::barHeight);
     advanced.setBounds(0, TitleBar::barHeight, leftW,
-                       mainH - TitleBar::barHeight);
+                       mainH + advH - TitleBar::barHeight);
     plasmaTune.setBounds(leftW + mainW, TitleBar::barHeight, PlasmaTune::width,
                          mainH - TitleBar::barHeight);
     drawer.setBounds(leftW + mainW + tuneW, TitleBar::barHeight, PresetDrawer::width,
                      mainH - TitleBar::barHeight);
-    looperDrawer.setBounds(0, mainH, getWidth(), loopH);
+    looperDrawer.setBounds(0, mainH + advH, getWidth(), loopH);
 
     auto bounds = juce::Rectangle<int>(leftW, 0, mainW, mainH).reduced(28, 16);
     bounds.removeFromTop(TitleBar::barHeight);
@@ -1264,6 +1325,7 @@ void MainComponent::timerCallback()
     processor.setListenLane(advanced.getSelectedLane());
     if (advanced.isVisible())
         advanced.refresh();
+    followAutomationUi(processor.getTape().isPlaying());
     if (spacePedalDown && ! looperPedalArmed())
         releaseSpacePedal();
     if (looperDrawer.isVisible())

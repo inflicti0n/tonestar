@@ -7,7 +7,66 @@
 #include <cmath>
 #include <functional>
 
-enum class CircleIcon { Mute, Binaural, Debug, Presets, Advanced, Record, Folder, Export, Metro, Tune, Looper, Loop, Quantize, Play, Pause, Stop };
+enum class CircleIcon { Mute, Binaural, Debug, Presets, Advanced, Record, Folder, Export, Import, Metro, Tune, Looper, Loop, Quantize, Play, Pause, Stop, Automate, Process };
+
+inline void paintProcessStar(juce::Graphics& g, juce::Rectangle<float> r, juce::Colour colour)
+{
+    const auto c = r.getCentre();
+    const float reach = juce::jmin(r.getWidth(), r.getHeight()) * 0.42f;
+    juce::Path path;
+    path.startNewSubPath(c.x, c.y - reach * 1.15f);
+    path.cubicTo({ c.x + reach * 0.12f, c.y - reach * 0.12f },
+                 { c.x + reach * 0.12f, c.y - reach * 0.12f },
+                 { c.x + reach * 1.35f, c.y });
+    path.cubicTo({ c.x + reach * 0.12f, c.y + reach * 0.12f },
+                 { c.x + reach * 0.12f, c.y + reach * 0.12f },
+                 { c.x, c.y + reach * 1.15f });
+    path.cubicTo({ c.x - reach * 0.12f, c.y + reach * 0.12f },
+                 { c.x - reach * 0.12f, c.y + reach * 0.12f },
+                 { c.x - reach * 1.35f, c.y });
+    path.cubicTo({ c.x - reach * 0.12f, c.y - reach * 0.12f },
+                 { c.x - reach * 0.12f, c.y - reach * 0.12f },
+                 { c.x, c.y - reach * 1.15f });
+    path.closeSubPath();
+    g.setColour(colour);
+    g.fillPath(path);
+}
+
+inline void paintAutomateIcon(juce::Graphics& g, juce::Rectangle<float> r, juce::Colour colour)
+{
+    g.setColour(colour);
+    juce::Path curve;
+    curve.startNewSubPath(r.getX(), r.getBottom() - r.getHeight() * 0.22f);
+    curve.quadraticTo(r.getCentreX(), r.getY() + r.getHeight() * 0.02f,
+                      r.getRight(), r.getY() + r.getHeight() * 0.28f);
+    g.strokePath(curve, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved,
+                                            juce::PathStrokeType::rounded));
+    const float d = juce::jmax(2.4f, r.getWidth() * 0.22f);
+    g.fillEllipse(r.getX() + r.getWidth() * 0.06f - d * 0.5f,
+                  r.getBottom() - r.getHeight() * 0.28f - d * 0.5f, d, d);
+    g.fillEllipse(r.getRight() - r.getWidth() * 0.08f - d * 0.5f,
+                  r.getY() + r.getHeight() * 0.28f - d * 0.5f, d, d);
+}
+
+inline void paintMuteIcon(juce::Graphics& g, juce::Rectangle<float> r, juce::Colour colour, bool muted)
+{
+    // Heroicons 24 outline: speaker-wave / speaker-x-mark (MIT).
+    static const char* wave =
+        "M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z";
+    static const char* xmark =
+        "M17.25 9.75 19.5 12m0 0 2.25 2.25M19.5 12l2.25-2.25M19.5 12l-2.25 2.25m-10.5-6 4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z";
+
+    auto path = juce::Drawable::parseSVGPath(muted ? xmark : wave);
+    const float size = juce::jmin(r.getWidth(), r.getHeight());
+    const float scale = size / 24.0f;
+    const auto t = juce::AffineTransform::scale(scale, scale)
+                       .translated(r.getCentreX() - 12.0f * scale,
+                                   r.getCentreY() - 12.0f * scale);
+    g.setColour(colour);
+    g.strokePath(path, juce::PathStrokeType(juce::jmax(1.4f, 1.5f * scale),
+                                            juce::PathStrokeType::curved,
+                                            juce::PathStrokeType::rounded), t);
+}
 
 class CircleToggle : public juce::Button
 {
@@ -55,18 +114,7 @@ private:
 
         if (icon == CircleIcon::Mute)
         {
-            auto body = juce::Rectangle<float>(r.getX(), r.getY() + r.getHeight() * 0.28f,
-                                               r.getWidth() * 0.34f, r.getHeight() * 0.44f);
-            g.fillRoundedRectangle(body, 1.6f);
-            juce::Path cone;
-            cone.addTriangle(body.getRight() - 1.0f, r.getY() + r.getHeight() * 0.12f,
-                             r.getRight(), r.getCentreY(),
-                             body.getRight() - 1.0f, r.getBottom() - r.getHeight() * 0.12f);
-            g.fillPath(cone);
-            if (getToggleState())
-            {
-                g.drawLine(r.getX() + 1.0f, r.getY() + 1.0f, r.getRight() - 1.0f, r.getBottom() - 1.0f, 2.0f);
-            }
+            paintMuteIcon(g, r, colour, getToggleState());
         }
         else if (icon == CircleIcon::Binaural)
         {
@@ -116,13 +164,25 @@ private:
         else if (icon == CircleIcon::Export)
         {
             const float mid = r.getCentreX();
-            g.fillRoundedRectangle(r.getX(), r.getBottom() - r.getHeight() * 0.30f,
-                                   r.getWidth(), r.getHeight() * 0.30f, 1.4f);
-            g.fillRect(mid - 1.1f, r.getY() + r.getHeight() * 0.06f, 2.2f, r.getHeight() * 0.50f);
+            g.fillRoundedRectangle(r.getX(), r.getBottom() - r.getHeight() * 0.28f,
+                                   r.getWidth(), r.getHeight() * 0.28f, 1.4f);
+            g.fillRect(mid - 1.1f, r.getY() + r.getHeight() * 0.22f, 2.2f, r.getHeight() * 0.50f);
             juce::Path head;
-            head.addTriangle(mid, r.getY() + r.getHeight() * 0.66f,
-                             mid - r.getWidth() * 0.28f, r.getY() + r.getHeight() * 0.38f,
-                             mid + r.getWidth() * 0.28f, r.getY() + r.getHeight() * 0.38f);
+            head.addTriangle(mid, r.getY() + r.getHeight() * 0.02f,
+                             mid - r.getWidth() * 0.30f, r.getY() + r.getHeight() * 0.36f,
+                             mid + r.getWidth() * 0.30f, r.getY() + r.getHeight() * 0.36f);
+            g.fillPath(head);
+        }
+        else if (icon == CircleIcon::Import)
+        {
+            const float mid = r.getCentreX();
+            g.fillRoundedRectangle(r.getX(), r.getBottom() - r.getHeight() * 0.28f,
+                                   r.getWidth(), r.getHeight() * 0.28f, 1.4f);
+            g.fillRect(mid - 1.1f, r.getY() + r.getHeight() * 0.06f, 2.2f, r.getHeight() * 0.42f);
+            juce::Path head;
+            head.addTriangle(mid, r.getY() + r.getHeight() * 0.70f,
+                             mid - r.getWidth() * 0.30f, r.getY() + r.getHeight() * 0.38f,
+                             mid + r.getWidth() * 0.30f, r.getY() + r.getHeight() * 0.38f);
             g.fillPath(head);
         }
         else if (icon == CircleIcon::Metro)
@@ -204,6 +264,14 @@ private:
         {
             g.fillRoundedRectangle(r.reduced(r.getWidth() * 0.08f), 2.0f);
         }
+        else if (icon == CircleIcon::Automate)
+        {
+            paintAutomateIcon(g, r, colour);
+        }
+        else if (icon == CircleIcon::Process)
+        {
+            paintProcessStar(g, r.reduced(1.2f), colour);
+        }
         else
         {
             const float midX = r.getCentreX();
@@ -219,6 +287,196 @@ private:
     juce::Colour onFill;
     juce::Colour offFill;
     CircleIcon icon;
+};
+
+class PieToggle : public juce::Component,
+                  public juce::SettableTooltipClient
+{
+public:
+    enum class Slice { Process, Mute, Automate, None };
+
+    PieToggle()
+    {
+        setMouseCursor(juce::MouseCursor::PointingHandCursor);
+        setWantsKeyboardFocus(false);
+        setRepaintsOnMouseActivity(true);
+    }
+
+    void setProcessOn(bool on)
+    {
+        if (processOn == on)
+            return;
+        processOn = on;
+        repaint();
+    }
+
+    void setMuteOn(bool on)
+    {
+        if (muteOn == on)
+            return;
+        muteOn = on;
+        repaint();
+    }
+
+    void setAutoOn(bool on)
+    {
+        if (autoOn == on)
+            return;
+        autoOn = on;
+        repaint();
+    }
+
+    void setProcessEnabled(bool on)
+    {
+        if (processEnabled == on)
+            return;
+        processEnabled = on;
+        if (! processEnabled)
+            processOn = false;
+        repaint();
+    }
+
+    bool isProcessOn() const { return processOn; }
+    bool isMuteOn() const { return muteOn; }
+    bool isAutoOn() const { return autoOn; }
+
+    std::function<void(bool)> onProcess;
+    std::function<void(bool)> onMute;
+    std::function<void(bool)> onAutomate;
+
+    void paint(juce::Graphics& g) override
+    {
+        const auto bounds = getLocalBounds().toFloat();
+        const float d = juce::jmin(bounds.getWidth(), bounds.getHeight());
+        const auto disc = bounds.withSizeKeepingCentre(d, d);
+        const auto c = disc.getCentre();
+        const float overlap = 0.008f;
+        const float pi = juce::MathConstants<float>::pi;
+
+        const auto offFill = Theme::panel().interpolatedWith(Theme::voidFill(), 0.68f);
+        g.setColour(offFill);
+        g.fillEllipse(disc);
+
+        auto drawSlice = [&](float from, float to, bool on, juce::Colour colour, bool enabled, bool lit)
+        {
+            juce::Path p;
+            p.addPieSegment(disc, from - overlap, to + overlap, 0.0f);
+            auto fill = on ? colour : offFill;
+            if (! enabled)
+                fill = Theme::voidFill();
+            if (lit && enabled)
+                fill = fill.brighter(0.08f);
+            g.setColour(fill);
+            g.fillPath(p);
+        };
+
+        drawSlice(-pi / 3.0f, pi / 3.0f, processOn && processEnabled, Theme::starlight(),
+                  processEnabled, hover == Slice::Process);
+        drawSlice(pi / 3.0f, pi, autoOn, Theme::nova(), true, hover == Slice::Automate);
+        drawSlice(pi, pi * 5.0f / 3.0f, muteOn, Theme::flare(), true, hover == Slice::Mute);
+
+        auto iconAt = [&](float midAngle)
+        {
+            const float sliceD = disc.getWidth();
+            const float rad = sliceD * 0.27f;
+            const float s = sliceD * 0.28f;
+            return juce::Rectangle<float>(s, s).withCentre({ c.x + std::sin(midAngle) * rad,
+                                                            c.y - std::cos(midAngle) * rad });
+        };
+
+        const auto processGlyph = (processOn && processEnabled) ? Theme::onAccent()
+            : (processEnabled ? Theme::dim() : Theme::dim().withAlpha(0.35f));
+        paintProcessStar(g, iconAt(0.0f), processGlyph);
+        paintMuteIcon(g, iconAt(pi * 4.0f / 3.0f), muteOn ? Theme::onAccent() : Theme::dim(), muteOn);
+        paintAutomateIcon(g, iconAt(pi * 2.0f / 3.0f), autoOn ? Theme::onAccent() : Theme::dim());
+    }
+
+    void mouseMove(const juce::MouseEvent& e) override
+    {
+        const auto next = sliceAt(e.position);
+        if (next == hover)
+            return;
+        hover = next;
+        setTooltip(tooltipFor(next));
+        repaint();
+    }
+
+    void mouseExit(const juce::MouseEvent&) override
+    {
+        if (hover == Slice::None)
+            return;
+        hover = Slice::None;
+        setTooltip({});
+        repaint();
+    }
+
+    void mouseDown(const juce::MouseEvent& e) override
+    {
+        switch (sliceAt(e.position))
+        {
+            case Slice::Process:
+                if (! processEnabled)
+                    return;
+                processOn = ! processOn;
+                if (onProcess != nullptr)
+                    onProcess(processOn);
+                break;
+            case Slice::Mute:
+                muteOn = ! muteOn;
+                if (onMute != nullptr)
+                    onMute(muteOn);
+                break;
+            case Slice::Automate:
+                autoOn = ! autoOn;
+                if (onAutomate != nullptr)
+                    onAutomate(autoOn);
+                break;
+            case Slice::None:
+                break;
+        }
+        repaint();
+    }
+
+private:
+    static juce::String tooltipFor(Slice s)
+    {
+        if (s == Slice::Process)
+            return "Process";
+        if (s == Slice::Mute)
+            return "Mute";
+        if (s == Slice::Automate)
+            return "Automation";
+        return {};
+    }
+
+    Slice sliceAt(juce::Point<float> p) const
+    {
+        const auto bounds = getLocalBounds().toFloat();
+        const float d = juce::jmin(bounds.getWidth(), bounds.getHeight());
+        const auto c = bounds.getCentre();
+        const float dx = p.x - c.x;
+        const float dy = p.y - c.y;
+        const float dist = std::sqrt(dx * dx + dy * dy);
+        if (dist > d * 0.5f)
+            return Slice::None;
+
+        float ang = std::atan2(dx, -dy);
+        if (ang < 0.0f)
+            ang += juce::MathConstants<float>::twoPi;
+
+        const float pi = juce::MathConstants<float>::pi;
+        if (ang < pi / 3.0f || ang > pi * 5.0f / 3.0f)
+            return Slice::Process;
+        if (ang < pi)
+            return Slice::Automate;
+        return Slice::Mute;
+    }
+
+    bool processOn = false;
+    bool muteOn = false;
+    bool autoOn = false;
+    bool processEnabled = true;
+    Slice hover = Slice::None;
 };
 
 class TitleBar : public juce::Component
